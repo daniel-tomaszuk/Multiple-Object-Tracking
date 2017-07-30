@@ -2,9 +2,22 @@ from django.shortcuts import render
 import numpy as np
 from matplotlib import pyplot as plt
 import cv2
+import sys
 
 
 def otsu_binary(img):
+    """
+    Otsu binarization function.
+    :param img: Image to binarize - should be in greyscale.
+    :return: Image after binarization.
+    """
+    # check if input image is in grayscale (2D)
+    try:
+        if img.shape[2]:
+            # if there is 3rd dimension
+            sys.exit('otsu_binary(img) input image should be in grayscale!')
+    except IndexError:
+        pass  # image doesn't have 3td dimension - proceed
 
     plt.close('all')
     blur = cv2.GaussianBlur(img, (5, 5), 0)
@@ -39,9 +52,10 @@ def otsu_binary(img):
     return img_thresh1
 
 
-img = cv2.imread('static/files/hardware.jpg', 0)
+img = cv2.imread('static/files/hardware.jpg')
 img_thresh1 = otsu_binary(img)
 titles = ['Original Image', 'BINARY']
+
 
 images = [img, img_thresh1]
 for i in range(2):
@@ -49,9 +63,5 @@ for i in range(2):
     plt.title(titles[i])
     plt.xticks([]), plt.yticks([])
 plt.show()
-
-
-
-
 
 
