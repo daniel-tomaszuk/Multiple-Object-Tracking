@@ -3,7 +3,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 import cv2
 import sys
-
+import time
 
 def otsu_binary(img):
     """
@@ -51,17 +51,35 @@ def otsu_binary(img):
     ret, img_thresh1 = cv2.threshold(img, thresh, 255, cv2.THRESH_BINARY)
     return img_thresh1
 
+# img = cv2.imread('static/files/hardware.jpg')
+# img_thresh1 = otsu_binary(img)
+# titles = ['Original Image', 'BINARY']
+#
+#
+# images = [img, img_thresh1]
+# for i in range(2):
+#     plt.subplot(1, 2, i + 1), plt.imshow(images[i], 'gray')
+#     plt.title(titles[i])
+#     plt.xticks([]), plt.yticks([])
+# plt.show()
 
-img = cv2.imread('static/files/hardware.jpg')
-img_thresh1 = otsu_binary(img)
-titles = ['Original Image', 'BINARY']
+
+# list of all VideoCapture methods and attributes
+# [print(method) for method in dir(cap) if callable(getattr(cap, method))]
+
+cap = cv2.VideoCapture('static/files/small.avi')
+ret, frame = cap.read()
+
+print(ret)
+print(cap.isOpened())
 
 
-images = [img, img_thresh1]
-for i in range(2):
-    plt.subplot(1, 2, i + 1), plt.imshow(images[i], 'gray')
-    plt.title(titles[i])
-    plt.xticks([]), plt.yticks([])
-plt.show()
+while(cap.isOpened()):
+    ret, frame = cap.read()
+    print(cap.read())
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    plt.imshow(gray)
+    plt.show()
 
+cap.release()
 
