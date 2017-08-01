@@ -3,8 +3,6 @@ import numpy as np
 from matplotlib import pyplot as plt
 import cv2
 import sys
-import time
-import os
 
 
 def otsu_binary(img):
@@ -19,9 +17,9 @@ def otsu_binary(img):
             # if there is 3rd dimension
             sys.exit('otsu_binary(img) input image should be in grayscale!')
     except IndexError:
-        pass  # image doesn't have 3td dimension - proceed
+        pass  # image doesn't have 3rd dimension - proceed
 
-    plt.close('all')
+    # plt.close('all')
     blur = cv2.GaussianBlur(img, (5, 5), 0)
     # find normalized_histogram, and its cumulative distribution function
     hist = cv2.calcHist([blur], [0], None, [256], [0, 256])
@@ -47,8 +45,9 @@ def otsu_binary(img):
             fn_min = fn
             thresh = i
     # find otsu's threshold value with OpenCV function
-    ret, otsu = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    print("{} {}".format(thresh, ret))
+    ret, otsu = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY +
+                              cv2.THRESH_OTSU)
+    # print("{} {}".format(thresh, ret))
 
     ret, img_thresh1 = cv2.threshold(img, thresh, 255, cv2.THRESH_BINARY)
     return img_thresh1
@@ -70,7 +69,7 @@ def select_frames(video, frame_start, frame_stop):
     while cap.isOpened():
         ret, frame = cap.read()
         video_fragment.append(frame)
-        if cv2.waitKey(15) & 0xFF == ord('q') or not ret \
+        if cv2.waitKey(1) & 0xFF == ord('q') or not ret \
                 or (cap.get(1)) == frame_stop + 1:
             break
     #     # img, text, (x,y), font, size, color, thickens
@@ -85,34 +84,50 @@ def select_frames(video, frame_start, frame_stop):
     return video_fragment
 
 
-# img = cv2.imread('static/files/hardware.jpg')
-# img_thresh1 = otsu_binary(img)
-# titles = ['Original Image', 'BINARY']
-#
-#
-# images = [img, img_thresh1]
-# for i in range(2):
-#     plt.subplot(1, 2, i + 1), plt.imshow(images[i], 'gray')
-#     plt.title(titles[i])
-#     plt.xticks([]), plt.yticks([])
-# plt.show()
-
 
 # list of all VideoCapture methods and attributes
 # [print(method) for method in dir(cap) if callable(getattr(cap, method))]
 
+start_frame = 1000
+stop_frame = 1500
 font = cv2.FONT_HERSHEY_SIMPLEX
-vid_fragment = select_frames('static/files/CIMG4027.MOV', 1000, 1100)
+vid_fragment = select_frames('static/files/CIMG4027.MOV', start_frame,
+                             stop_frame)
 i = 0
+bin_frames = []
 for frame in vid_fragment:
-        # img, text, (x,y), font, size, color, thickens
-    cv2.putText(frame, 'f.nr:' + str(1000 + i + 1),
-                    (100, 15), font, 0.5, (255, 255, 255), 1)
     if cv2.waitKey(15) & 0xFF == ord('q'):
         break
+    gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    for m in range(gray_frame.shape[0]):  # height
+        for n in range(gray_frame.shape[1]):  # width
+            if n > 390 or m > 160:
+                gray_frame[m][n] = 120
 
-    cv2.imshow('frame', frame)
+
+    # create a CLAHE object (Arguments are optional)
+    clahe = cv2.createCLAHE(clipLimit=8.0, tileGridSize=(8, 8))
+    # cl1 = clahe.apply(gray_frame)
+
+    ret, th1 = cv2.threshold(gray_frame, 60, 255, cv2.THRESH_BINARY)
+
+    # frame_thresh1 = otsu_binary(cl1)
+    bin_frames.append(th1)
+    print(i)
     i += 1
+
+
+i = 0
+for frame in bin_frames:
+    # img, text, (x,y), font, size, color, thickens
+    cv2.putText(frame, 'f.nr:' + str(start_frame + i + 1),
+                (100, 15), font, 0.5, (0, 0, 0), 1)
+    if cv2.waitKey(30) & 0xFF == ord('q'):
+        break
+    # cv2.imshow('frame', frame_thresh1)
+    cv2.imshow('bin', frame)
+    i += 1
+
 input('Press enter in the console to exit..')
 cv2.destroyAllWindows()
 
