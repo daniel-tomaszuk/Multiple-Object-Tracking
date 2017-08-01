@@ -3,6 +3,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 import cv2
 import sys
+from scipy import ndimage
 
 
 def otsu_binary(img):
@@ -93,6 +94,13 @@ stop_frame = 1500
 font = cv2.FONT_HERSHEY_SIMPLEX
 vid_fragment = select_frames('static/files/CIMG4027.MOV', start_frame,
                              stop_frame)
+# kernel for morphological operations
+
+# el = ndimage.generate_binary_structure(2, 1)
+# kernel = np.ones((5, 5), np.uint8)
+kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (19, 19))
+erosion_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+dilate_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
 i = 0
 bin_frames = []
 for frame in vid_fragment:
@@ -104,13 +112,10 @@ for frame in vid_fragment:
             if n > 390 or m > 160:
                 gray_frame[m][n] = 120
 
-
     # create a CLAHE object (Arguments are optional)
-    clahe = cv2.createCLAHE(clipLimit=8.0, tileGridSize=(8, 8))
+    # clahe = cv2.createCLAHE(clipLimit=8.0, tileGridSize=(8, 8))
     # cl1 = clahe.apply(gray_frame)
-
     ret, th1 = cv2.threshold(gray_frame, 60, 255, cv2.THRESH_BINARY)
-
     # frame_thresh1 = otsu_binary(cl1)
     bin_frames.append(th1)
     print(i)
@@ -120,15 +125,20 @@ for frame in vid_fragment:
 i = 0
 for frame in bin_frames:
     # img, text, (x,y), font, size, color, thickens
-    cv2.putText(frame, 'f.nr:' + str(start_frame + i + 1),
-                (100, 15), font, 0.5, (0, 0, 0), 1)
+
     if cv2.waitKey(30) & 0xFF == ord('q'):
         break
     # cv2.imshow('frame', frame_thresh1)
-    cv2.imshow('bin', frame)
+    erosion = cv2.erode(frame, erosion_kernel, iterations=1)
+    opening = cv2.morphologyEx(erosion, cv2.MORPH_OPEN, kernel)
+    dilate = cv2.dilate(opening, dilate_kernel, iterations=2)
+
+    cv2.putText(dilate, 'f.nr:' + str(start_frame + i + 1),
+                (100, 15), font, 0.5, (0, 0, 0), 1)
+    cv2.imshow('bin', dilate)
     i += 1
 
-input('Press enter in the console to exit..')
+# input('Press enter in the console to exit..')
 cv2.destroyAllWindows()
 
 
