@@ -85,62 +85,107 @@ def select_frames(video, frame_start, frame_stop):
     return video_fragment
 
 
+def read_image(path, name, ext, amount):
+    """
+    Function for reading images from folder. Name of images should be:
+    name_index.extension so function can work automatic.
+    Indexes should be in order! If they are not, function stops if image
+    with next index is not found.
+    Example: image_5.jpg -> read_image('path', 'image_', 'jpg', 50)
+    :param path: string, path of images to read
+    :param name: string, name of image without index
+    :param ext: string, extension of image to read with ".", ex: '.jpg'
+    :param amount: integer,
+    :return: selected images as table if image exist or omits the image
+    if it doesn't exist
+    """
+    images = []
+    for i in range(amount):
+        # try:
+        print(path + '/' + name + str(i) + ext)
+        img = cv2.imread(path + '/' + name + str(i) + ext, 1)
+        # check if image was read
+        try:
+            if img.shape[0]:
+                images.append(img)
+        except AttributeError:
+            pass
+    return images
+
+
+
+#
+# images = read_image('static/files/bubble_positives', 'b', '.JPG', 50)
+#
+# i = 0
+# for img in images:
+#     if cv2.waitKey(15) & 0xFF == ord('q'):
+#         break
+#     cv2.imshow('bubble' + str(i), img)
+#     i += 1
+# input('Press enter in the console to exit..')
+# cv2.destroyAllWindows()
+
 
 # list of all VideoCapture methods and attributes
 # [print(method) for method in dir(cap) if callable(getattr(cap, method))]
-
-start_frame = 1000
-stop_frame = 1500
-font = cv2.FONT_HERSHEY_SIMPLEX
-vid_fragment = select_frames('static/files/CIMG4027.MOV', start_frame,
-                             stop_frame)
-# kernel for morphological operations
-
-# el = ndimage.generate_binary_structure(2, 1)
-# kernel = np.ones((5, 5), np.uint8)
-kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (19, 19))
-erosion_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
-dilate_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
-i = 0
-bin_frames = []
-for frame in vid_fragment:
-    if cv2.waitKey(15) & 0xFF == ord('q'):
-        break
-    gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    for m in range(gray_frame.shape[0]):  # height
-        for n in range(gray_frame.shape[1]):  # width
-            if n > 390 or m > 160:
-                gray_frame[m][n] = 120
-
-    # create a CLAHE object (Arguments are optional)
-    # clahe = cv2.createCLAHE(clipLimit=8.0, tileGridSize=(8, 8))
-    # cl1 = clahe.apply(gray_frame)
-    ret, th1 = cv2.threshold(gray_frame, 60, 255, cv2.THRESH_BINARY)
-    # frame_thresh1 = otsu_binary(cl1)
-    bin_frames.append(th1)
-    print(i)
-    i += 1
-
-
-i = 0
-for frame in bin_frames:
-    # img, text, (x,y), font, size, color, thickens
-
-    if cv2.waitKey(30) & 0xFF == ord('q'):
-        break
-    # cv2.imshow('frame', frame_thresh1)
-    erosion = cv2.erode(frame, erosion_kernel, iterations=1)
-    opening = cv2.morphologyEx(erosion, cv2.MORPH_OPEN, kernel)
-    dilate = cv2.dilate(opening, dilate_kernel, iterations=2)
-
-    cv2.putText(dilate, 'f.nr:' + str(start_frame + i + 1),
-                (100, 15), font, 0.5, (0, 0, 0), 1)
-    cv2.imshow('bin', dilate)
-    i += 1
-
-# input('Press enter in the console to exit..')
-cv2.destroyAllWindows()
-
-
+#
+# start_frame = 1
+# stop_frame = 1000
+# font = cv2.FONT_HERSHEY_SIMPLEX
+# vid_fragment = select_frames('static/files/film_vid_7.avi', start_frame,
+#                              stop_frame)
+# # kernel for morphological operations
+#
+# # el = ndimage.generate_binary_structure(2, 1)
+# # kernel = np.ones((5, 5), np.uint8)
+#
+# # check cv2.getStructuringElement() doc for more info
+# kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (19, 19))
+# erosion_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+# dilate_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+#
+# i = 0
+# bin_frames = []
+# for frame in vid_fragment:
+#     if cv2.waitKey(15) & 0xFF == ord('q'):
+#         break
+#     cv2.imwrite('static/files/PIV_bubble_set/PIV_frame' + '_' +
+#                 str(i) + '.jpg', frame)
+#     gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+#     for m in range(gray_frame.shape[0]):  # height
+#         for n in range(gray_frame.shape[1]):  # width
+#             if n > 390 or m > 160:
+#                 gray_frame[m][n] = 120
+#
+#     # create a CLAHE object (Arguments are optional)
+#     # clahe = cv2.createCLAHE(clipLimit=8.0, tileGridSize=(8, 8))
+#     # cl1 = clahe.apply(gray_frame)
+#     ret, th1 = cv2.threshold(gray_frame, 60, 255, cv2.THRESH_BINARY)
+#     # frame_thresh1 = otsu_binary(cl1)
+#     bin_frames.append(th1)
+#     print(i)
+#     i += 1
+#
+# i = 0
+# for frame in bin_frames:
+#     # img, text, (x,y), font, size, color, thickens
+#
+#     if cv2.waitKey(30) & 0xFF == ord('q'):
+#         break
+#     # cv2.imshow('frame', frame_thresh1)
+#     erosion = cv2.erode(frame, erosion_kernel, iterations=1)
+#     opening = cv2.morphologyEx(erosion, cv2.MORPH_OPEN, kernel)
+#     dilate = cv2.dilate(opening, dilate_kernel, iterations=2)
+#
+#     cv2.putText(dilate, 'f.nr:' + str(start_frame + i + 1),
+#                 (100, 15), font, 0.5, (0, 0, 0), 1)
+#     cv2.imshow('bin', dilate)
+#     i += 1
+#
+# # input('Press enter in the console to exit..')
+# cv2.destroyAllWindows()
+#
+#
 
 
