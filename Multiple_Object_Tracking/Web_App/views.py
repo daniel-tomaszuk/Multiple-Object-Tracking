@@ -176,11 +176,44 @@ def img_inv(img):
     """
     return cv2.bitwise_not(img)
 
+
+def local_maxima(grey_image):
+    """
+    Finds local maxima in grayscale image.
+    source:
+    https://dsp.stackexchange.com/questions/17932/finding-local-
+    brightness-maximas-with-opencv
+    :param grey_image: Input 2D image.
+    :return: Coordinates of local maxima points.
+    """
+
+    square_diameter_log_3 = 3  # 27x27
+
+    total = grey_image
+    for axis in range(2):
+        d = 1
+        for k in range(square_diameter_log_3):
+            total = np.maximum(total, np.roll(total, d, axis))
+            total = np.maximum(total, np.roll(total, -d, axis))
+            d *= 3
+
+    maxima = total == grey_image
+    h, w = grey_image.shape
+
+    result = []
+    for j in range(h):
+        for k in range(w):
+            if maxima[j][k]:
+                result.append((k, j))
+    return result
+
+
+
 # list of all VideoCapture methods and attributes
 # [print(method) for method in dir(cap) if callable(getattr(cap, method))]
 
 start_frame = 0
-stop_frame = 500
+stop_frame = 100
 font = cv2.FONT_HERSHEY_SIMPLEX
 vid_fragment = select_frames('static/files/CIMG4027.MOV', start_frame,
                              stop_frame)
@@ -226,15 +259,18 @@ for frame in bin_frames:
     # # blob detection
     # img_detected = blob_detect(dilate)
 
-    log_kernel = get_log_kernel(35, 35)
+    log_kernel = get_log_kernel(20, 10)
     log_img = cv2.filter2D(dilate, cv2.CV_32F, log_kernel)
+
+    points = local_maxima(log_img)
 
     cv2.putText(log_img, 'f.nr:' + str(start_frame + i + 1),
                 (100, 15), font, 0.5, (254, 254, 254), 1)
-    cv2.imshow('bin', log_img*20)
 
+    for point in points:
+        cv2.circle(log_img, point, 3, (0, 0, 254), 1)
 
-
+    cv2.imshow('bin', log_img)
 
     i += 1
 
