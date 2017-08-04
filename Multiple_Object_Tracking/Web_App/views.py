@@ -113,15 +113,57 @@ def read_image(path, name, ext, amount):
     return images
 
 
+def blob_detect(img_with_blobs):
 
-#
-# images = read_image('static/files/bubble_positives', 'b', '.JPG', 50)
+    params = cv2.SimpleBlobDetector_Params()
+    # # Change thresholds
+    # params.minThreshold = 10
+    # params.maxThreshold = 200
+
+    # Filter by Area.
+    params.filterByArea = True
+    params.minArea = 5
+
+    # Filter by Circularity
+    params.filterByCircularity = True
+    params.minCircularity = 0.0
+
+    # Filter by Convexity
+    params.filterByConvexity = True
+    params.minConvexity = 0.0
+
+    # Filter by Inertia
+    params.filterByInertia = True
+    params.minInertiaRatio = 0.0
+
+    # Create a detector with the parameters
+    detector = cv2.SimpleBlobDetector_create(params)
+
+    # get positions of blobs
+    keypoints = detector.detect(img_with_blobs)
+
+    # Draw detected blobs as red circles.
+    # cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS ensures the size of the
+    # circle corresponds to the size of blob
+    im_with_keypoints = cv2.drawKeypoints(img_with_blobs, keypoints,
+                                          np.array([]), (0, 0, 255),
+                        cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
+    return im_with_keypoints
+
+
+# generate images
+# images = read_image('static/files/bubble_negatives', '', '.JPG', 25)
 #
 # i = 0
 # for img in images:
-#     if cv2.waitKey(15) & 0xFF == ord('q'):
+#     if cv2.waitKey(100) & 0xFF == ord('q'):
 #         break
-#     cv2.imshow('bubble' + str(i), img)
+#
+#     img[::, ::, 2] = 200
+#
+#     cv2.imwrite('static/files/bubble_negatives/' + str(i) + '_red' +
+#                 '.jpg', img)
+#     cv2.imshow('bubble', img)
 #     i += 1
 # input('Press enter in the console to exit..')
 # cv2.destroyAllWindows()
@@ -129,63 +171,62 @@ def read_image(path, name, ext, amount):
 
 # list of all VideoCapture methods and attributes
 # [print(method) for method in dir(cap) if callable(getattr(cap, method))]
-#
-# start_frame = 1
-# stop_frame = 1000
-# font = cv2.FONT_HERSHEY_SIMPLEX
-# vid_fragment = select_frames('static/files/film_vid_7.avi', start_frame,
-#                              stop_frame)
-# # kernel for morphological operations
-#
-# # el = ndimage.generate_binary_structure(2, 1)
-# # kernel = np.ones((5, 5), np.uint8)
-#
-# # check cv2.getStructuringElement() doc for more info
-# kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (19, 19))
-# erosion_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
-# dilate_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
-#
-# i = 0
-# bin_frames = []
-# for frame in vid_fragment:
-#     if cv2.waitKey(15) & 0xFF == ord('q'):
-#         break
-#     cv2.imwrite('static/files/PIV_bubble_set/PIV_frame' + '_' +
-#                 str(i) + '.jpg', frame)
-#     gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-#     for m in range(gray_frame.shape[0]):  # height
-#         for n in range(gray_frame.shape[1]):  # width
-#             if n > 390 or m > 160:
-#                 gray_frame[m][n] = 120
-#
-#     # create a CLAHE object (Arguments are optional)
-#     # clahe = cv2.createCLAHE(clipLimit=8.0, tileGridSize=(8, 8))
-#     # cl1 = clahe.apply(gray_frame)
-#     ret, th1 = cv2.threshold(gray_frame, 60, 255, cv2.THRESH_BINARY)
-#     # frame_thresh1 = otsu_binary(cl1)
-#     bin_frames.append(th1)
-#     print(i)
-#     i += 1
-#
-# i = 0
-# for frame in bin_frames:
-#     # img, text, (x,y), font, size, color, thickens
-#
-#     if cv2.waitKey(30) & 0xFF == ord('q'):
-#         break
-#     # cv2.imshow('frame', frame_thresh1)
-#     erosion = cv2.erode(frame, erosion_kernel, iterations=1)
-#     opening = cv2.morphologyEx(erosion, cv2.MORPH_OPEN, kernel)
-#     dilate = cv2.dilate(opening, dilate_kernel, iterations=2)
-#
-#     cv2.putText(dilate, 'f.nr:' + str(start_frame + i + 1),
-#                 (100, 15), font, 0.5, (0, 0, 0), 1)
-#     cv2.imshow('bin', dilate)
-#     i += 1
-#
-# # input('Press enter in the console to exit..')
-# cv2.destroyAllWindows()
-#
-#
+
+start_frame = 0
+stop_frame = 500
+font = cv2.FONT_HERSHEY_SIMPLEX
+vid_fragment = select_frames('static/files/CIMG4027.MOV', start_frame,
+                             stop_frame)
+
+
+# kernel for morphological operations
+# check cv2.getStructuringElement() doc for more info
+kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (19, 19))
+erosion_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+dilate_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+
+i = 0
+bin_frames = []
+for frame in vid_fragment:
+    if cv2.waitKey(15) & 0xFF == ord('q'):
+        break
+    gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    for m in range(gray_frame.shape[0]):  # height
+        for n in range(gray_frame.shape[1]):  # width
+            if n > 390 or m > 160:
+                gray_frame[m][n] = 120
+
+    # create a CLAHE object (Arguments are optional)
+    # clahe = cv2.createCLAHE(clipLimit=8.0, tileGridSize=(8, 8))
+    # cl1 = clahe.apply(gray_frame)
+    ret, th1 = cv2.threshold(gray_frame, 60, 255, cv2.THRESH_BINARY)
+    # frame_thresh1 = otsu_binary(cl1)
+    bin_frames.append(th1)
+    print(i)
+    i += 1
+
+
+i = 0
+for frame in bin_frames:
+    # img, text, (x,y), font, size, color, thickens
+    if cv2.waitKey(30) & 0xFF == ord('q'):
+        break
+    # cv2.imshow('frame', frame_thresh1)
+    erosion = cv2.erode(frame, erosion_kernel, iterations=1)
+    opening = cv2.morphologyEx(erosion, cv2.MORPH_OPEN, kernel)
+    dilate = cv2.dilate(opening, dilate_kernel, iterations=2)
+
+    # blob detection
+    img_detected = blob_detect(dilate)
+
+    cv2.putText(img_detected, 'f.nr:' + str(start_frame + i + 1),
+                (100, 15), font, 0.5, (0, 0, 0), 1)
+    cv2.imshow('bin', img_detected)
+    i += 1
+
+# input('Press enter in the console to exit..')
+cv2.destroyAllWindows()
+
+
 
 
