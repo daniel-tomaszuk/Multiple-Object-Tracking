@@ -177,33 +177,33 @@ def img_inv(img):
     return cv2.bitwise_not(img)
 
 
-def local_maxima(grey_image):
+def local_maxima(gray_image):
     """
     Finds local maxima in grayscale image.
     source:
     https://dsp.stackexchange.com/questions/17932/finding-local-
     brightness-maximas-with-opencv
-    :param grey_image: Input 2D image.
+    :param gray_image: Input 2D image.
     :return: Coordinates of local maxima points.
     """
 
     square_diameter_log_3 = 3  # 27x27
 
-    total = grey_image
+    total = gray_image
     for axis in range(2):
         d = 1
         for k in range(square_diameter_log_3):
             total = np.maximum(total, np.roll(total, d, axis))
             total = np.maximum(total, np.roll(total, -d, axis))
             d *= 3
-
-    maxima = total == grey_image
-    h, w = grey_image.shape
-
+    # if total == gray_iamge, maxima = total
+    maxima = total == gray_image
+    h, w = gray_image.shape
     result = []
     for j in range(h):
         for k in range(w):
-            if maxima[j][k]:
+            # gray_image[j][k] has float values!
+            if maxima[j][k] and gray_image[j][k]*255 > 1:
                 result.append((k, j))
     return result
 
@@ -251,24 +251,23 @@ for frame in bin_frames:
     # img, text, (x,y), font, size, color, thickens
     if cv2.waitKey(30) & 0xFF == ord('q'):
         break
-    # cv2.imshow('frame', frame_thresh1)
+    # prepare image - morphological operations
     erosion = cv2.erode(frame, erosion_kernel, iterations=1)
     opening = cv2.morphologyEx(erosion, cv2.MORPH_OPEN, kernel)
     dilate = cv2.dilate(opening, dilate_kernel, iterations=2)
 
-    # # blob detection
-    # img_detected = blob_detect(dilate)
-
-    log_kernel = get_log_kernel(20, 10)
+    # create LoG kernel for finding local maximas
+    log_kernel = get_log_kernel(30, 15)
     log_img = cv2.filter2D(dilate, cv2.CV_32F, log_kernel)
 
+    # get local maximas of filtered image
     points = local_maxima(log_img)
 
     cv2.putText(log_img, 'f.nr:' + str(start_frame + i + 1),
                 (100, 15), font, 0.5, (254, 254, 254), 1)
-
+    # mark local maximas
     for point in points:
-        cv2.circle(log_img, point, 3, (0, 0, 254), 1)
+        cv2.circle(log_img, point, 3, (254, 0, 0), 1)
 
     cv2.imshow('bin', log_img)
 
