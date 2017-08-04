@@ -213,7 +213,7 @@ def local_maxima(gray_image):
 # [print(method) for method in dir(cap) if callable(getattr(cap, method))]
 
 start_frame = 0
-stop_frame = 100
+stop_frame = 1000
 font = cv2.FONT_HERSHEY_SIMPLEX
 vid_fragment = select_frames('static/files/CIMG4027.MOV', start_frame,
                              stop_frame)
@@ -245,12 +245,9 @@ for frame in vid_fragment:
     print(i)
     i += 1
 
-
 i = 0
+maxima_points = []
 for frame in bin_frames:
-    # img, text, (x,y), font, size, color, thickens
-    if cv2.waitKey(30) & 0xFF == ord('q'):
-        break
     # prepare image - morphological operations
     erosion = cv2.erode(frame, erosion_kernel, iterations=1)
     opening = cv2.morphologyEx(erosion, cv2.MORPH_OPEN, kernel)
@@ -260,18 +257,26 @@ for frame in bin_frames:
     log_kernel = get_log_kernel(30, 15)
     log_img = cv2.filter2D(dilate, cv2.CV_32F, log_kernel)
 
-    # get local maximas of filtered image
-    points = local_maxima(log_img)
-
-    cv2.putText(log_img, 'f.nr:' + str(start_frame + i + 1),
-                (100, 15), font, 0.5, (254, 254, 254), 1)
-    # mark local maximas
-    for point in points:
-        cv2.circle(log_img, point, 3, (254, 0, 0), 1)
-
-    cv2.imshow('bin', log_img)
-
+    # get local maximas of filtered image and append them to the maxima list
+    maxima_points.append(local_maxima(log_img))
+    print(i)
     i += 1
+
+i = 0
+for frame in vid_fragment:
+    if cv2.waitKey(30) & 0xFF == ord('q'):
+        break
+    # img, text, (x,y), font, size, color, thickens
+    cv2.putText(frame, 'f.nr:' + str(start_frame + i + 1),
+                (100, 15), font, 0.5, (254, 254, 254), 1)
+
+    # mark local maximas for every frame
+    for point in maxima_points[i]:
+        cv2.circle(frame, point, 3, (0, 0, 255), 1)
+    i += 1
+    cv2.imshow('bin', frame)
+
+
 
 # input('Press enter in the console to exit..')
 cv2.destroyAllWindows()
