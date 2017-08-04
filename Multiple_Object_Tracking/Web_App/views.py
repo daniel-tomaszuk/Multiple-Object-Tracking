@@ -1,9 +1,7 @@
 from django.shortcuts import render
 import numpy as np
-from matplotlib import pyplot as plt
 import cv2
 import sys
-from scipy import ndimage
 
 
 def otsu_binary(img):
@@ -114,7 +112,6 @@ def read_image(path, name, ext, amount):
 
 
 def blob_detect(img_with_blobs):
-
     params = cv2.SimpleBlobDetector_Params()
     # # Change thresholds
     # params.minThreshold = 10
@@ -151,23 +148,33 @@ def blob_detect(img_with_blobs):
     return im_with_keypoints
 
 
-# generate images
-# images = read_image('static/files/bubble_negatives', '', '.JPG', 25)
-#
-# i = 0
-# for img in images:
-#     if cv2.waitKey(100) & 0xFF == ord('q'):
-#         break
-#
-#     img[::, ::, 2] = 200
-#
-#     cv2.imwrite('static/files/bubble_negatives/' + str(i) + '_red' +
-#                 '.jpg', img)
-#     cv2.imshow('bubble', img)
-#     i += 1
-# input('Press enter in the console to exit..')
-# cv2.destroyAllWindows()
+def get_log_kernel(siz, std):
+    """
+    LoG(x,y) =
+(1/(pi*sigma^4)) * (1 - (x^2+y^2)/(sigma^2)) * (e ^ (- (x^2 + y^2) / 2sigma^2)
 
+    :param siz:
+    :param std:
+    :return:
+    """
+    x = np.linspace(-siz, siz, 2*siz+1)
+    y = np.linspace(-siz, siz, 2*siz+1)
+    x, y = np.meshgrid(x, y)
+    arg = -(x**2 + y**2) / (2*std**2)
+    h = np.exp(arg)
+    h[h < sys.float_info.epsilon * h.max()] = 0
+    h = h/h.sum() if h.sum() != 0 else h
+    h1 = h*(x**2 + y**2 - 2*std**2) / (std**4)
+    return h1 - h1.mean()
+
+
+def img_inv(img):
+    """
+    Return inversion of an image.
+    :param img: Input image.
+    :return: Inverted image.
+    """
+    return cv2.bitwise_not(img)
 
 # list of all VideoCapture methods and attributes
 # [print(method) for method in dir(cap) if callable(getattr(cap, method))]
@@ -216,12 +223,19 @@ for frame in bin_frames:
     opening = cv2.morphologyEx(erosion, cv2.MORPH_OPEN, kernel)
     dilate = cv2.dilate(opening, dilate_kernel, iterations=2)
 
-    # blob detection
-    img_detected = blob_detect(dilate)
+    # # blob detection
+    # img_detected = blob_detect(dilate)
 
-    cv2.putText(img_detected, 'f.nr:' + str(start_frame + i + 1),
-                (100, 15), font, 0.5, (0, 0, 0), 1)
-    cv2.imshow('bin', img_detected)
+    log_kernel = get_log_kernel(35, 35)
+    log_img = cv2.filter2D(dilate, cv2.CV_32F, log_kernel)
+
+    cv2.putText(log_img, 'f.nr:' + str(start_frame + i + 1),
+                (100, 15), font, 0.5, (254, 254, 254), 1)
+    cv2.imshow('bin', log_img*20)
+
+
+
+
     i += 1
 
 # input('Press enter in the console to exit..')
