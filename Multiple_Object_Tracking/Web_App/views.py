@@ -3,6 +3,9 @@ import numpy as np
 import cv2
 import sys
 
+from filterpy.gh import GHFilter
+import matplotlib.pyplot as plt
+
 
 def otsu_binary(img):
     """
@@ -204,21 +207,22 @@ def local_maxima(gray_image):
         for k in range(w):
             # gray_image[j][k] has float values!
             if maxima[j][k] and gray_image[j][k]*255 > 1:
+                # watch pixel coordinates output! (w, h)
                 result.append((k, j))
     return result
-
 
 
 # list of all VideoCapture methods and attributes
 # [print(method) for method in dir(cap) if callable(getattr(cap, method))]
 
 start_frame = 0
-stop_frame = 1000
+stop_frame = 500
 font = cv2.FONT_HERSHEY_SIMPLEX
 vid_fragment = select_frames('static/files/CIMG4027.MOV', start_frame,
                              stop_frame)
 
-
+height = vid_fragment[0].shape[0]
+width = vid_fragment[0].shape[1]
 # kernel for morphological operations
 # check cv2.getStructuringElement() doc for more info
 kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (19, 19))
@@ -231,8 +235,8 @@ for frame in vid_fragment:
     if cv2.waitKey(15) & 0xFF == ord('q'):
         break
     gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    for m in range(gray_frame.shape[0]):  # height
-        for n in range(gray_frame.shape[1]):  # width
+    for m in range(height):  # height
+        for n in range(width):  # width
             if n > 390 or m > 160:
                 gray_frame[m][n] = 120
 
@@ -247,6 +251,8 @@ for frame in vid_fragment:
 
 i = 0
 maxima_points = []
+x = []
+y = []
 for frame in bin_frames:
     # prepare image - morphological operations
     erosion = cv2.erode(frame, erosion_kernel, iterations=1)
@@ -259,6 +265,13 @@ for frame in bin_frames:
 
     # get local maximas of filtered image and append them to the maxima list
     maxima_points.append(local_maxima(log_img))
+
+    frame_maximas = local_maxima(log_img)
+
+    for point in frame_maximas:
+        x.append(point[0])
+        y.append(point[1])
+        # print(point)
     print(i)
     i += 1
 
@@ -276,10 +289,19 @@ for frame in vid_fragment:
     i += 1
     cv2.imshow('bin', frame)
 
-
-
 # input('Press enter in the console to exit..')
 cv2.destroyAllWindows()
+# plot point by means of matplotlib (plt)
+plt.plot(x, y, 'r.')
+# # [xmin xmax ymin ymax]
+plt.axis([0, width, height, 0])
+plt.xlabel('width [px]')
+plt.ylabel('height [px]')
+plt.title('Objects past points (not trajectories)')
+plt.grid()
+plt.show()
+
+# print(maxima_points)
 
 
 
