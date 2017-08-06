@@ -3,8 +3,9 @@ import numpy as np
 import cv2
 import sys
 
-from filterpy.gh import GHFilter
 import matplotlib.pyplot as plt
+from filterpy.gh import GHFilter
+from munkres import Munkres, print_matrix
 
 
 def otsu_binary(img):
@@ -212,6 +213,40 @@ def local_maxima(gray_image):
     return result
 
 
+def munkres(matrix):
+    """
+    Implementation of Hungarian algorithm for solving the Assignment Problem
+    between measurements and estimates in multidimensional state observer.
+    Example of usage:
+        indexes = munkres(matrix)
+    :param matrix: input matrix - should be a square matrix
+    :return: index_list of tuples with assigned indexes
+    """
+    # cost matrix
+    cost_matrix = []
+    # create rows to write to
+    for row in matrix:
+        cost_row = []
+    # write into rows
+    for col in row:
+        # cost_row += [sys.maxsize - col]
+        cost_row += [col]
+        cost_matrix += [cost_row]
+    # print_matrix(cost_matrix, msg='Cost matrix:')
+    m = Munkres()
+    indexes = m.compute(cost_matrix)
+    # print_matrix(matrix, msg='Highest profit through this matrix:')
+    total = 0
+    index_list = []
+    for row, column in indexes:
+        value = matrix[row][column]
+        total += value
+        index_list.append((row, column))
+        # print('({}, {}) -> {}'.format(row, column, value))
+    # print('total profit={}'.format(total))
+    return index_list
+
+
 # list of all VideoCapture methods and attributes
 # [print(method) for method in dir(cap) if callable(getattr(cap, method))]
 
@@ -302,7 +337,6 @@ plt.grid()
 plt.show()
 
 # print(maxima_points)
-
 
 
 
