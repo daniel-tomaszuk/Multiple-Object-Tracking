@@ -4,7 +4,15 @@ import cv2
 import sys
 
 import matplotlib.pyplot as plt
-from filterpy.gh import GHFilter
+
+from scipy.spatial.distance import pdist
+from scipy.spatial.distance import squareform
+from scipy.linalg import inv
+from numpy import dot
+
+from filterpy.kalman import KalmanFilter
+from filterpy.common import Q_discrete_white_noise
+
 from munkres import Munkres, print_matrix
 
 
@@ -216,7 +224,7 @@ def local_maxima(gray_image):
 def munkres(matrix):
     """
     Implementation of Hungarian algorithm for solving the Assignment Problem
-    between measurements and estimates in multidimensional state observer.
+    between measurements and estimates in multivariate linear kalman filter
     Example of usage:
         indexes = munkres(matrix)
     :param matrix: input matrix - should be a square matrix
@@ -247,11 +255,32 @@ def munkres(matrix):
     return index_list
 
 
+def pair(prior, measurements):
+    """
+    Creates pairs between priors and measurement so each lays as close as
+    possible to each other.
+    :param prior: prior state prediction (position) from Kalman filter
+    :param measurements: positions from blob detection
+    :return: optimal pairs between estimate - measurement
+    """
+    array = np.array([[20.5, 40.5], [20., 40.], [30.6, 505.]])
+    # array = np.array([[20.5, 40.5], [20., 40.], [30.6, 505.]])
+    # count euclidean metric between priors and measurements
+    metric = pdist(array, metric='euclidean')
+    square = squareform(metric)
+    min_index = []
+    for index in munkres(square):
+        if square[index] != 0.0:
+            min_index.append(index)
+            print(square[index])
+    return min_index
+
+
 # list of all VideoCapture methods and attributes
 # [print(method) for method in dir(cap) if callable(getattr(cap, method))]
 
 start_frame = 0
-stop_frame = 500
+stop_frame = 100
 font = cv2.FONT_HERSHEY_SIMPLEX
 vid_fragment = select_frames('static/files/CIMG4027.MOV', start_frame,
                              stop_frame)
@@ -297,16 +326,13 @@ for frame in bin_frames:
     # create LoG kernel for finding local maximas
     log_kernel = get_log_kernel(30, 15)
     log_img = cv2.filter2D(dilate, cv2.CV_32F, log_kernel)
-
-    # get local maximas of filtered image and append them to the maxima list
-    maxima_points.append(local_maxima(log_img))
-
-    frame_maximas = local_maxima(log_img)
-
-    for point in frame_maximas:
+    for point in local_maxima(log_img):
+        # (x, y) -> maxima points coordinates for later use
         x.append(point[0])
         y.append(point[1])
-        # print(point)
+
+    # get local maximas of filtered image per frame
+    maxima_points.append(local_maxima(log_img))
     print(i)
     i += 1
 
@@ -335,8 +361,4 @@ plt.ylabel('height [px]')
 plt.title('Objects past points (not trajectories)')
 plt.grid()
 plt.show()
-
-# print(maxima_points)
-
-
 
