@@ -255,16 +255,20 @@ def munkres(matrix):
     return index_list
 
 
-def pair(prior, measurements):
+def pair(prior, *args):
     """
     Creates pairs between priors and measurement so each lays as close as
     possible to each other.
+    Example of use:
+    index = pair([20.5, 40.5], [20., 40.], [30.6, 505.]))
     :param prior: prior state prediction (position) from Kalman filter
-    :param measurements: positions from blob detection
+    :param args: positions from blob detection - measurements [x, y]
     :return: optimal pairs between estimate - measurement
     """
-    array = np.array([[20.5, 40.5], [20., 40.], [30.6, 505.]])
-    # array = np.array([[20.5, 40.5], [20., 40.], [30.6, 505.]])
+    array =[]
+    array.append(prior)
+    for arg in args:
+        array.append(arg)
     # count euclidean metric between priors and measurements
     metric = pdist(array, metric='euclidean')
     square = squareform(metric)
@@ -272,11 +276,9 @@ def pair(prior, measurements):
     for index in munkres(square):
         if square[index] != 0.0:
             min_index.append(index)
+            # distance between indexes
             print(square[index])
     return min_index
-
-print(pair(None, None))
-
 
 # list of all VideoCapture methods and attributes
 # [print(method) for method in dir(cap) if callable(getattr(cap, method))]
@@ -411,12 +413,23 @@ def kalman_filter(x, P, R, Q, dt, measurements):
 # # input('Press enter in the console to exit..')
 # cv2.destroyAllWindows()
 # # plot point by means of matplotlib (plt)
-# plt.plot(x, y, 'r.')
-# # # [xmin xmax ymin ymax]
-# plt.axis([0, width, height, 0])
-# plt.xlabel('width [px]')
-# plt.ylabel('height [px]')
-# plt.title('Objects past points (not trajectories)')
-# plt.grid()
-# plt.show()
-#
+# # plt.plot(x, y, 'r.')
+# # # # [xmin xmax ymin ymax]
+# # plt.axis([0, width, height, 0])
+# # plt.xlabel('width [px]')
+# # plt.ylabel('height [px]')
+# # plt.title('Objects past points (not trajectories)')
+# # plt.grid()
+# # plt.show()
+
+
+
+
+
+
+
+
+
+
+
+
