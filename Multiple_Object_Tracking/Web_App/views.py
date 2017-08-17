@@ -275,90 +275,148 @@ def pair(prior, measurements):
             print(square[index])
     return min_index
 
+print(pair(None, None))
+
 
 # list of all VideoCapture methods and attributes
 # [print(method) for method in dir(cap) if callable(getattr(cap, method))]
 
-start_frame = 0
-stop_frame = 100
-font = cv2.FONT_HERSHEY_SIMPLEX
-vid_fragment = select_frames('static/files/CIMG4027.MOV', start_frame,
-                             stop_frame)
+dt = 1.
+R_var = 10
+Q_var = 0.01
+# [x, y, dx, dy, ddx, ddy]
+x = np.array([[0., 0., 0., 0., 0., 0.]]).T
+# state covariance matrix - no initial covariances, variances only
+# [10^2 px, 10^2 px, ..] -
+P = np.diag([100, 100, 10, 10, 1, 1])
+# state transtion matrix for 9 state variables (position - .. - accaleration)
+F = np.array([[1, 0, dt, 0, 0.5*pow(dt, 2), 0],
+              [0, 1, 0, dt, 0, 0.5*pow(dt, 2)],
+              [0, 0, 1, 0, dt, 0],
+              [0, 0, 0, 1, 0, dt],
+              [0, 0, 0, 0, 1, 0],
+              [0, 0, 0, 0, 0, 1]])
+# x and y coordinates only:
+H = np.array([[1., 0., 0., 0., 0., 0.],
+              [0., 1., 0., 0., 0., 0.]])
+# no initial corelation between x and y positions - variances only
+R = np.array([[R_var, 0.], [0., R_var]])  # measurement covariance matrix
+Q = np.array([[Q_var, 0.], [0., Q_var]])  # model covariance matrix
 
-height = vid_fragment[0].shape[0]
-width = vid_fragment[0].shape[1]
-# kernel for morphological operations
-# check cv2.getStructuringElement() doc for more info
-kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (19, 19))
-erosion_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
-dilate_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
 
-i = 0
-bin_frames = []
-for frame in vid_fragment:
-    if cv2.waitKey(15) & 0xFF == ord('q'):
-        break
-    gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    for m in range(height):  # height
-        for n in range(width):  # width
-            if n > 390 or m > 160:
-                gray_frame[m][n] = 120
+def kalman_filter(x, P, R, Q, dt, measurements):
+    """
+    Returns estimates and covariances for x and y positions.
+    Linear constant acceleration model for a state [x dx ddx].T
+    Linear multivariate Kalman filter.
+    :param x: initial state
+    :param P: state covariance matrix
+    :param R: measurement covariance matrix
+    :param Q: process model covariance matrix
+    :param dt: epoch (time step)
+    :param measurements: measurements for update step
+    :return: estimated positions
+    """
+    # estimates and covariances
+    xs = []
+    cov = []
+    for z in measurements:
+        # predict
+        x = dot(F, x)
+        P = dot(F, P).dot(F.T) + Q
 
-    # create a CLAHE object (Arguments are optional)
-    # clahe = cv2.createCLAHE(clipLimit=8.0, tileGridSize=(8, 8))
-    # cl1 = clahe.apply(gray_frame)
-    ret, th1 = cv2.threshold(gray_frame, 60, 255, cv2.THRESH_BINARY)
-    # frame_thresh1 = otsu_binary(cl1)
-    bin_frames.append(th1)
-    print(i)
-    i += 1
+        # update
+        S = dot(H, P).dot(H.T) + R
+        K = dot(P, H.T).dot(inv(S))
+        y = z - dot(H, x)
+        x += dot(K, y)
+        P = P - dot(K, H).dot(P)
+        xs.append(x)
+        cov.append(P)
 
-i = 0
-maxima_points = []
-x = []
-y = []
-for frame in bin_frames:
-    # prepare image - morphological operations
-    erosion = cv2.erode(frame, erosion_kernel, iterations=1)
-    opening = cv2.morphologyEx(erosion, cv2.MORPH_OPEN, kernel)
-    dilate = cv2.dilate(opening, dilate_kernel, iterations=2)
 
-    # create LoG kernel for finding local maximas
-    log_kernel = get_log_kernel(30, 15)
-    log_img = cv2.filter2D(dilate, cv2.CV_32F, log_kernel)
-    for point in local_maxima(log_img):
-        # (x, y) -> maxima points coordinates for later use
-        x.append(point[0])
-        y.append(point[1])
 
-    # get local maximas of filtered image per frame
-    maxima_points.append(local_maxima(log_img))
-    print(i)
-    i += 1
 
-i = 0
-for frame in vid_fragment:
-    if cv2.waitKey(30) & 0xFF == ord('q'):
-        break
-    # img, text, (x,y), font, size, color, thickens
-    cv2.putText(frame, 'f.nr:' + str(start_frame + i + 1),
-                (100, 15), font, 0.5, (254, 254, 254), 1)
-
-    # mark local maximas for every frame
-    for point in maxima_points[i]:
-        cv2.circle(frame, point, 3, (0, 0, 255), 1)
-    i += 1
-    cv2.imshow('bin', frame)
-
-# input('Press enter in the console to exit..')
-cv2.destroyAllWindows()
-# plot point by means of matplotlib (plt)
-plt.plot(x, y, 'r.')
-# # [xmin xmax ymin ymax]
-plt.axis([0, width, height, 0])
-plt.xlabel('width [px]')
-plt.ylabel('height [px]')
-plt.title('Objects past points (not trajectories)')
-plt.grid()
-plt.show()
-
+# start_frame = 0
+# stop_frame = 100
+# font = cv2.FONT_HERSHEY_SIMPLEX
+# vid_fragment = select_frames('static/files/CIMG4027.MOV', start_frame,
+#                              stop_frame)
+#
+# height = vid_fragment[0].shape[0]
+# width = vid_fragment[0].shape[1]
+# # kernel for morphological operations
+# # check cv2.getStructuringElement() doc for more info
+# kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (19, 19))
+# erosion_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+# dilate_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+#
+# i = 0
+# bin_frames = []
+# for frame in vid_fragment:
+#     if cv2.waitKey(15) & 0xFF == ord('q'):
+#         break
+#     gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+#     for m in range(height):  # height
+#         for n in range(width):  # width
+#             if n > 390 or m > 160:
+#                 gray_frame[m][n] = 120
+#
+#     # create a CLAHE object (Arguments are optional)
+#     # clahe = cv2.createCLAHE(clipLimit=8.0, tileGridSize=(8, 8))
+#     # cl1 = clahe.apply(gray_frame)
+#     ret, th1 = cv2.threshold(gray_frame, 60, 255, cv2.THRESH_BINARY)
+#     # frame_thresh1 = otsu_binary(cl1)
+#     bin_frames.append(th1)
+#     print(i)
+#     i += 1
+#
+# i = 0
+# maxima_points = []
+# x = []
+# y = []
+# for frame in bin_frames:
+#     # prepare image - morphological operations
+#     erosion = cv2.erode(frame, erosion_kernel, iterations=1)
+#     opening = cv2.morphologyEx(erosion, cv2.MORPH_OPEN, kernel)
+#     dilate = cv2.dilate(opening, dilate_kernel, iterations=2)
+#
+#     # create LoG kernel for finding local maximas
+#     log_kernel = get_log_kernel(30, 15)
+#     log_img = cv2.filter2D(dilate, cv2.CV_32F, log_kernel)
+#     for point in local_maxima(log_img):
+#         # (x, y) -> maxima points coordinates for later use
+#         x.append(point[0])
+#         y.append(point[1])
+#
+#     # get local maximas of filtered image per frame
+#     maxima_points.append(local_maxima(log_img))
+#     print(i)
+#     i += 1
+#
+# i = 0
+# for frame in vid_fragment:
+#     if cv2.waitKey(30) & 0xFF == ord('q'):
+#         break
+#     # img, text, (x,y), font, size, color, thickens
+#     cv2.putText(frame, 'f.nr:' + str(start_frame + i + 1),
+#                 (100, 15), font, 0.5, (254, 254, 254), 1)
+#
+#     # mark local maximas for every frame
+#     for point in maxima_points[i]:
+#         cv2.circle(frame, point, 3, (0, 0, 255), 1)
+#     i += 1
+#     cv2.imshow('bin', frame)
+#
+# # input('Press enter in the console to exit..')
+# cv2.destroyAllWindows()
+# # plot point by means of matplotlib (plt)
+# plt.plot(x, y, 'r.')
+# # # [xmin xmax ymin ymax]
+# plt.axis([0, width, height, 0])
+# plt.xlabel('width [px]')
+# plt.ylabel('height [px]')
+# plt.title('Objects past points (not trajectories)')
+# plt.grid()
+# plt.show()
+#
