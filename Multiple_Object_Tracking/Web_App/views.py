@@ -227,23 +227,14 @@ def munkres(matrix):
     between measurements and estimates in multivariate linear kalman filter
     Example of usage:
         indexes = munkres(matrix)
-    :param matrix: input matrix - should be a square matrix
+    :param matrix: input matrix - should be a square cost matrix
     :return: index_list of tuples with assigned indexes,
              cost_list of assignment between indexes
     """
-    # cost matrix
-    cost_matrix = []
-    # create rows to write to
-    for row in matrix:
-        cost_row = []
-    # write into rows
-    for col in row:
-        # cost_row += [sys.maxsize - col]
-        cost_row += [col]
-        cost_matrix += [cost_row]
+
     # print_matrix(cost_matrix, msg='Cost matrix:')
     m = Munkres()
-    indexes = m.compute(cost_matrix)
+    indexes = m.compute(matrix)
     # print_matrix(matrix, msg='Highest profit through this matrix:')
     total = 0
     index_list = []
@@ -401,8 +392,8 @@ for frame in range(stop_frame):
     distance = squareform(distance)
     # remove elements that are repeated - (0-1), (1-0) etc.
     distance = distance[0:est_number, 0:est_number]
-    index, cost = pair
-    print(distance)
+    # print_matrix(distance)
+    index, cost = munkres(distance)
     input('dupa')
 
 i = 0
