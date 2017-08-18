@@ -367,7 +367,7 @@ for i in range(len(maxima_points[0])):
     x = np.append(x,
                   [[maxima_points[0][i][0], maxima_points[0][i][1],
                    0, 0, 0, 0]], axis=0)
-# removal of "None" values
+# removal of "None" values that were required for append
 x = x[1::]
 
 # kalman filter loop
@@ -384,7 +384,7 @@ for frame in range(stop_frame):
     # update
     S = dot(H, P).dot(H.T) + R
     K = dot(P, H.T).dot(inv(S))
-    # create matrix for metric counting - pdist
+    # create cost matrix for munkres
     temp_matrix = np.array(x[0:est_number, 0:2])
     temp_matrix = np.append(temp_matrix, measurements, axis=0)
     distance = pdist(temp_matrix, 'euclidean')  # returns vector
@@ -394,7 +394,25 @@ for frame in range(stop_frame):
     distance = distance[0:est_number, 0:est_number]
     # print_matrix(distance)
     index, cost = munkres(distance)
-    input('dupa')
+
+    for i in range(est_number):
+        if index[i]:
+            if distance[index[i]] > 20:
+                # incorrect assignment
+                index[i] = (-1, -1)
+        else:
+            # if no assignment for prior - measurement
+            # incorrect assignment
+            index[i] = (-1, -1)
+            
+    print(index)
+    input('pupa')
+
+
+
+
+
+
 
 i = 0
 # draw measurements point loop
