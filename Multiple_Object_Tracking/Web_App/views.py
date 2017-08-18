@@ -381,7 +381,7 @@ for frame in range(stop_frame):
         temp_x = np.array([x[i][::]]).T
         x[i][::] = dot(F, x[i][::])
     P = dot(F, P).dot(F.T) + Q
-    # update
+    # prepare for update phase -> get (prior - measurement) assignment
     S = dot(H, P).dot(H.T) + R
     K = dot(P, H.T).dot(inv(S))
     # create cost matrix for munkres
@@ -398,15 +398,34 @@ for frame in range(stop_frame):
     for i in range(est_number):
         if index[i]:
             if distance[index[i]] > 20:
+                # distance is too great for assignment
                 # incorrect assignment
                 index[i] = (-1, -1)
         else:
             # if no assignment for prior - measurement
             # incorrect assignment
             index[i] = (-1, -1)
-            
-    print(index)
-    input('pupa')
+
+    # update phase
+    # make measurements as list of lists, not tuples
+    measurements = [[meas[0], meas[1]] for meas in measurements]
+    k = 0
+    for i in range(est_number):
+        # if there was successful munkres assignment
+        if index[i][0] >= 0 and index[i][1] >= 0:
+            for ind in index:
+                # find object that should get measurement next
+                if k == ind[0]:
+                    # count residual y: measurement - state
+                    y = np.array([measurements[ind[1]] - dot(H, x[k, ::])])
+                    # posterior
+                    x[k, ::] = x[k, ::] + dot(K, y.T).T
+        k += 1
+    print(x)
+    input()
+
+
+
 
 
 
