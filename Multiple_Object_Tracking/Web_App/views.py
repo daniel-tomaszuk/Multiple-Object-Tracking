@@ -255,30 +255,37 @@ def munkres(matrix):
     return index_list
 
 
-def pair(prior, *args):
+def pair(prior, measurements):
     """
     Creates pairs between priors and measurement so each lays as close as
     possible to each other.
     Example of use:
-    index = pair([20.5, 40.5], [20., 40.], [30.6, 505.]))
-    :param prior: prior state prediction (position) from Kalman filter
-    :param args: positions from blob detection - measurements [x, y]
-    :return: optimal pairs between estimate - measurement
+    index = pair((60, 0), [(60, 0), (219, 37), (357, 55), (78, 82),
+                 (301, 103), (202, 109), (376, 110)]))
+    :param prior: prior state prediction (position) from Kalman filter, tuple
+    :param measurements: positions from blob detection - measurements (x, y),
+                 list of tuples
+    :return: optimal pairs between estimate - measurement and cost of
+             assigement between them
     """
-    array =[]
-    array.append(prior)
-    for arg in args:
-        array.append(arg)
+    array = []
+    array.append([prior[0][0], prior[0][1]])
+    for measurement in measurements:
+        array.append([measurement[0], measurement[1]])
     # count euclidean metric between priors and measurements
     metric = pdist(array, metric='euclidean')
     square = squareform(metric)
     min_index = []
+    min_cost = []
     for index in munkres(square):
-        if square[index] != 0.0:
+        # do not match to itself (distance = 0) and match only when distance
+        # is low enough
+        if square[index] != 0.0 and square[index] < 80:
             min_index.append(index)
+            min_cost.append(square[index])
             # distance between indexes
-            print(square[index])
-    return min_index
+            # print(square[index])
+    return min_index, min_cost
 
 # list of all VideoCapture methods and attributes
 # [print(method) for method in dir(cap) if callable(getattr(cap, method))]
@@ -286,12 +293,11 @@ def pair(prior, *args):
 dt = 1.
 R_var = 10
 Q_var = 0.01
-# [x, y, dx, dy, ddx, ddy]
-x = np.array([[0., 0., 0., 0., 0., 0.]]).T
 # state covariance matrix - no initial covariances, variances only
 # [10^2 px, 10^2 px, ..] -
 P = np.diag([100, 100, 10, 10, 1, 1])
-# state transtion matrix for 9 state variables (position - .. - accaleration)
+# state transtion matrix for 6 state variables (position - .. - accaleration,
+# x, y)
 F = np.array([[1, 0, dt, 0, 0.5*pow(dt, 2), 0],
               [0, 1, 0, dt, 0, 0.5*pow(dt, 2)],
               [0, 0, 1, 0, dt, 0],
@@ -303,113 +309,114 @@ H = np.array([[1., 0., 0., 0., 0., 0.],
               [0., 1., 0., 0., 0., 0.]])
 # no initial corelation between x and y positions - variances only
 R = np.array([[R_var, 0.], [0., R_var]])  # measurement covariance matrix
-Q = np.array([[Q_var, 0.], [0., Q_var]])  # model covariance matrix
+# Q must be the same shape as P
+Q = np.diag([100, 100, 10, 10, 1, 1])  # model covariance matrix
 
+start_frame = 0
+stop_frame = 100
+font = cv2.FONT_HERSHEY_SIMPLEX
+vid_fragment = select_frames('static/files/CIMG4027.MOV', start_frame,
+                             stop_frame)
 
-def kalman_filter(x, P, R, Q, dt, measurements):
-    """
-    Returns estimates and covariances for x and y positions.
-    Linear constant acceleration model for a state [x dx ddx].T
-    Linear multivariate Kalman filter.
-    :param x: initial state
-    :param P: state covariance matrix
-    :param R: measurement covariance matrix
-    :param Q: process model covariance matrix
-    :param dt: epoch (time step)
-    :param measurements: measurements for update step
-    :return: estimated positions
-    """
-    # estimates and covariances
-    xs = []
-    cov = []
-    for z in measurements:
-        # predict
-        x = dot(F, x)
-        P = dot(F, P).dot(F.T) + Q
+height = vid_fragment[0].shape[0]
+width = vid_fragment[0].shape[1]
+# kernel for morphological operations
+# check cv2.getStructuringElement() doc for more info
+kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (19, 19))
+erosion_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+dilate_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
 
-        # update
-        S = dot(H, P).dot(H.T) + R
-        K = dot(P, H.T).dot(inv(S))
-        y = z - dot(H, x)
-        x += dot(K, y)
-        P = P - dot(K, H).dot(P)
-        xs.append(x)
-        cov.append(P)
+i = 0
+bin_frames = []
+# preprocess image loop
+for frame in vid_fragment:
+    if cv2.waitKey(15) & 0xFF == ord('q'):
+        break
+    gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    for m in range(height):  # height
+        for n in range(width):  # width
+            if n > 390 or m > 160:
+                gray_frame[m][n] = 120
 
+    # create a CLAHE object (Arguments are optional)
+    # clahe = cv2.createCLAHE(clipLimit=8.0, tileGridSize=(8, 8))
+    # cl1 = clahe.apply(gray_frame)
+    ret, th1 = cv2.threshold(gray_frame, 60, 255, cv2.THRESH_BINARY)
+    # frame_thresh1 = otsu_binary(cl1)
+    bin_frames.append(th1)
+    if i % 10 == 0:
+        print(i)
+    i += 1
 
+i = 0
+maxima_points = []
+# gather measurements loop
+for frame in bin_frames:
+    # prepare image - morphological operations
+    erosion = cv2.erode(frame, erosion_kernel, iterations=1)
+    opening = cv2.morphologyEx(erosion, cv2.MORPH_OPEN, kernel)
+    dilate = cv2.dilate(opening, dilate_kernel, iterations=2)
 
+    # create LoG kernel for finding local maximas
+    log_kernel = get_log_kernel(30, 15)
+    log_img = cv2.filter2D(dilate, cv2.CV_32F, log_kernel)
+    # get local maximas of filtered image per frame
+    maxima_points.append(local_maxima(log_img))
+    if i % 10 == 0:
+        print(i)
+    i += 1
 
-# start_frame = 0
-# stop_frame = 100
-# font = cv2.FONT_HERSHEY_SIMPLEX
-# vid_fragment = select_frames('static/files/CIMG4027.MOV', start_frame,
-#                              stop_frame)
-#
-# height = vid_fragment[0].shape[0]
-# width = vid_fragment[0].shape[1]
-# # kernel for morphological operations
-# # check cv2.getStructuringElement() doc for more info
-# kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (19, 19))
-# erosion_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
-# dilate_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
-#
-# i = 0
-# bin_frames = []
-# for frame in vid_fragment:
-#     if cv2.waitKey(15) & 0xFF == ord('q'):
-#         break
-#     gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-#     for m in range(height):  # height
-#         for n in range(width):  # width
-#             if n > 390 or m > 160:
-#                 gray_frame[m][n] = 120
-#
-#     # create a CLAHE object (Arguments are optional)
-#     # clahe = cv2.createCLAHE(clipLimit=8.0, tileGridSize=(8, 8))
-#     # cl1 = clahe.apply(gray_frame)
-#     ret, th1 = cv2.threshold(gray_frame, 60, 255, cv2.THRESH_BINARY)
-#     # frame_thresh1 = otsu_binary(cl1)
-#     bin_frames.append(th1)
-#     print(i)
-#     i += 1
-#
-# i = 0
-# maxima_points = []
-# x = []
-# y = []
-# for frame in bin_frames:
-#     # prepare image - morphological operations
-#     erosion = cv2.erode(frame, erosion_kernel, iterations=1)
-#     opening = cv2.morphologyEx(erosion, cv2.MORPH_OPEN, kernel)
-#     dilate = cv2.dilate(opening, dilate_kernel, iterations=2)
-#
-#     # create LoG kernel for finding local maximas
-#     log_kernel = get_log_kernel(30, 15)
-#     log_img = cv2.filter2D(dilate, cv2.CV_32F, log_kernel)
-#     for point in local_maxima(log_img):
-#         # (x, y) -> maxima points coordinates for later use
-#         x.append(point[0])
-#         y.append(point[1])
-#
-#     # get local maximas of filtered image per frame
-#     maxima_points.append(local_maxima(log_img))
-#     print(i)
-#     i += 1
-#
-# i = 0
-# for frame in vid_fragment:
-#     if cv2.waitKey(30) & 0xFF == ord('q'):
-#         break
-#     # img, text, (x,y), font, size, color, thickens
-#     cv2.putText(frame, 'f.nr:' + str(start_frame + i + 1),
-#                 (100, 15), font, 0.5, (254, 254, 254), 1)
-#
-#     # mark local maximas for every frame
-#     for point in maxima_points[i]:
-#         cv2.circle(frame, point, 3, (0, 0, 255), 1)
-#     i += 1
-#     cv2.imshow('bin', frame)
-#
+# required for append to work
+x = np.array([[None, None, None, None, None, None]])
+# state initialization - initial state is equal to measurements
+for i in range(len(maxima_points[0])):
+    x = np.append(x,
+                  [[maxima_points[0][i][0], maxima_points[0][i][1],
+                   0, 0, 0, 0]], axis=0)
+# removal of "None" values
+x = x[1::]
+
+# kalman filter loop
+for frame in range(stop_frame):
+    # measurements in one frame
+    measurements = maxima_points[::][frame]
+    est_number = len(measurements)
+    # for every object in measurements - count prior
+    for i in range(est_number):
+        # predict - prior
+        temp_x = np.array([x[i][::]]).T
+        x[i][::] = dot(F, x[i][::])
+    P = dot(F, P).dot(F.T) + Q
+    # update
+    S = dot(H, P).dot(H.T) + R
+    K = dot(P, H.T).dot(inv(S))
+    # create matrix for metric counting - pdist
+    temp_matrix = np.array(x[0:est_number, 0:2])
+    temp_matrix = np.append(temp_matrix, measurements, axis=0)
+    distance = pdist(temp_matrix, 'euclidean')  # returns vector
+    # make square matrix out of vector
+    distance = squareform(distance)
+    # remove elements that are repeated - (0-1), (1-0) etc.
+    distance = distance[0:est_number, 0:est_number]
+
+    print(distance)
+    input('dupa')
+
+i = 0
+# draw measurements point loop
+for frame in vid_fragment:
+    if cv2.waitKey(30) & 0xFF == ord('q'):
+        break
+    # img, text, (x,y), font, size, color, thickens
+    cv2.putText(frame, 'f.nr:' + str(start_frame + i + 1),
+                (100, 15), font, 0.5, (254, 254, 254), 1)
+
+    # mark local maximas for every frame
+    for point in maxima_points[i]:
+        cv2.circle(frame, point, 3, (0, 0, 255), 1)
+    i += 1
+    cv2.imshow('bin', frame)
+
 # # input('Press enter in the console to exit..')
 # cv2.destroyAllWindows()
 # # plot point by means of matplotlib (plt)
@@ -421,15 +428,4 @@ def kalman_filter(x, P, R, Q, dt, measurements):
 # # plt.title('Objects past points (not trajectories)')
 # # plt.grid()
 # # plt.show()
-
-
-
-
-
-
-
-
-
-
-
 
