@@ -228,7 +228,8 @@ def munkres(matrix):
     Example of usage:
         indexes = munkres(matrix)
     :param matrix: input matrix - should be a square matrix
-    :return: index_list of tuples with assigned indexes
+    :return: index_list of tuples with assigned indexes,
+             cost_list of assignment between indexes
     """
     # cost matrix
     cost_matrix = []
@@ -246,13 +247,15 @@ def munkres(matrix):
     # print_matrix(matrix, msg='Highest profit through this matrix:')
     total = 0
     index_list = []
+    cost_list = []
     for row, column in indexes:
         value = matrix[row][column]
+        cost_list.append(value)
         total += value
         index_list.append((row, column))
         # print('({}, {}) -> {}'.format(row, column, value))
     # print('total profit={}'.format(total))
-    return index_list
+    return index_list, cost_list
 
 
 def pair(prior, measurements):
@@ -398,7 +401,7 @@ for frame in range(stop_frame):
     distance = squareform(distance)
     # remove elements that are repeated - (0-1), (1-0) etc.
     distance = distance[0:est_number, 0:est_number]
-
+    index, cost = pair
     print(distance)
     input('dupa')
 
