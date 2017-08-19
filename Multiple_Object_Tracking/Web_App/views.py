@@ -421,15 +421,8 @@ for frame in range(stop_frame):
                     # posterior
                     x[k, ::] = x[k, ::] + dot(K, y.T).T
         k += 1
-    print(x)
-    input()
-
-
-
-
-
-
-
+    # posterior state covariance matrix
+    P = dot(np.identity(6) - dot(K, H), P)
 
 
 
