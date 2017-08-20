@@ -290,7 +290,7 @@ Q_var = 0.01
 # state covariance matrix - no initial covariances, variances only
 # [10^2 px, 10^2 px, ..] -
 P = np.diag([100, 100, 10, 10, 1, 1])
-# state transtion matrix for 6 state variables (position - .. - accaleration,
+# state transition matrix for 6 state variables (position - .. - acceleration,
 # x, y)
 F = np.array([[1, 0, dt, 0, 0.5*pow(dt, 2), 0],
               [0, 1, 0, dt, 0, 0.5*pow(dt, 2)],
@@ -369,16 +369,16 @@ for i in range(len(maxima_points[0])):
                    0, 0, 0, 0]], axis=0)
 # removal of "None" values that were required for append
 x = x[1::]
-
+# number of estimates at the start
+est_number = len(maxima_points[::][0])
 # kalman filter loop
 for frame in range(stop_frame):
     # measurements in one frame
     measurements = maxima_points[::][frame]
-    est_number = len(measurements)
-    # for every object in measurements - count prior
+
+    # count prior
     for i in range(est_number):
-        # predict - prior
-        temp_x = np.array([x[i][::]]).T
+        # prior
         x[i][::] = dot(F, x[i][::])
     P = dot(F, P).dot(F.T) + Q
     # prepare for update phase -> get (prior - measurement) assignment
@@ -386,15 +386,22 @@ for frame in range(stop_frame):
     K = dot(P, H.T).dot(inv(S))
     # create cost matrix for munkres
     temp_matrix = np.array(x[0:est_number, 0:2])
+    print(est_number)
+    print(len(measurements))
+    # temp_matrix.shape = 9,2 (estimates only)
+
     temp_matrix = np.append(temp_matrix, measurements, axis=0)
+    # temp_matrix.shape = 16,2 (estimates + measurements)
+    print(temp_matrix)
     distance = pdist(temp_matrix, 'euclidean')  # returns vector
     # make square matrix out of vector
     distance = squareform(distance)
     # remove elements that are repeated - (0-1), (1-0) etc.
-    distance = distance[0:est_number, 0:est_number]
+
+    distance = distance[0:(est_number), est_number::]
+    # print("matrix after cutting: ", distance.shape)
     # print_matrix(distance)
     index, cost = munkres(distance)
-
     for i in range(est_number):
         if index[i]:
             if distance[index[i]] > 20:
@@ -410,21 +417,40 @@ for frame in range(stop_frame):
     # make measurements as list of lists, not tuples
     measurements = [[meas[0], meas[1]] for meas in measurements]
     k = 0
+
     for i in range(est_number):
         # if there was successful munkres assignment
         if index[i][0] >= 0 and index[i][1] >= 0:
+            m = 0
             for ind in index:
                 # find object that should get measurement next
-                if k == ind[0]:
+
+                if k == ind[0] and ind[0] > 0 and ind[1] > 0:
                     # count residual y: measurement - state
                     y = np.array([measurements[ind[1]] - dot(H, x[k, ::])])
                     # posterior
                     x[k, ::] = x[k, ::] + dot(K, y.T).T
+                m += 1
         k += 1
     # posterior state covariance matrix
     P = dot(np.identity(6) - dot(K, H), P)
 
+    # finding new object and creating new prior for it
+    new_obj = []
+    obj_list = [index[i][0] for i in range(len(index))]
+    # if there is more measurements than indexes from munkres - new object
+    for i in range(len(measurements)):
+        if i not in obj_list:
+            new_obj.append(measurements[i])
 
+    for i in range(len(new_obj)):
+        if new_obj[i]:
+            #x[est_number + 1][::] = [new_obj[i][0], new_obj[i][1], 0, 0, 0, 0]
+            x = np.append(x, [[new_obj[i][0], new_obj[i][1], 0, 0, 0, 0]],
+                          axis=0)
+            est_number += 1
+    print('new frame!')
+    # input()
 
 i = 0
 # draw measurements point loop
