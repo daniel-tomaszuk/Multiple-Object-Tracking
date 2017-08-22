@@ -2,7 +2,7 @@ from django.shortcuts import render
 import numpy as np
 import cv2
 import sys
-
+import math
 import matplotlib.pyplot as plt
 
 from scipy.spatial.distance import pdist
@@ -371,6 +371,16 @@ for i in range(len(maxima_points[0])):
 x = x[1::]
 # number of estimates at the start
 est_number = len(maxima_points[::][0])
+# history of new objects appearance
+new_obj_hist = [[]]
+# difference between position of n-th object in m-1 frame and position of
+# the same object in m frame
+diff_2 = [[]]
+# for how many frames given object was detected
+frames_detected = []
+# x and y posterior positions (estimates)
+x_est = []
+y_est = []
 # kalman filter loop
 for frame in range(stop_frame):
     # measurements in one frame
@@ -386,21 +396,15 @@ for frame in range(stop_frame):
     K = dot(P, H.T).dot(inv(S))
     # create cost matrix for munkres
     temp_matrix = np.array(x[0:est_number, 0:2])
-    print(est_number)
-    print(len(measurements))
     # temp_matrix.shape = 9,2 (estimates only)
-
     temp_matrix = np.append(temp_matrix, measurements, axis=0)
     # temp_matrix.shape = 16,2 (estimates + measurements)
-    print(temp_matrix)
     distance = pdist(temp_matrix, 'euclidean')  # returns vector
     # make square matrix out of vector
     distance = squareform(distance)
     # remove elements that are repeated - (0-1), (1-0) etc.
-
-    distance = distance[0:(est_number), est_number::]
-    # print("matrix after cutting: ", distance.shape)
     # print_matrix(distance)
+    distance = distance[0:est_number, 0:est_number]
     index, cost = munkres(distance)
     for i in range(est_number):
         if index[i]:
@@ -417,15 +421,13 @@ for frame in range(stop_frame):
     # make measurements as list of lists, not tuples
     measurements = [[meas[0], meas[1]] for meas in measurements]
     k = 0
-
     for i in range(est_number):
         # if there was successful munkres assignment
         if index[i][0] >= 0 and index[i][1] >= 0:
             m = 0
             for ind in index:
                 # find object that should get measurement next
-
-                if k == ind[0] and ind[0] > 0 and ind[1] > 0:
+                if k == ind[0] and ind[1] < len(measurements):
                     # count residual y: measurement - state
                     y = np.array([measurements[ind[1]] - dot(H, x[k, ::])])
                     # posterior
@@ -442,13 +444,44 @@ for frame in range(stop_frame):
     for i in range(len(measurements)):
         if i not in obj_list:
             new_obj.append(measurements[i])
+            # create empty list for counting in how many frames
+            # object was visible
+            frames_detected.append([1])
+    # check if new object was detected before - do not add objects that are
+    # detected for the first time
+    # create history every day ( frame:) )
+    new_obj_hist.append(new_obj)
+    # count metrics for present and past new objects
+    if frame > 0:
+        present_metrics = ([[math.sqrt(pow(new_obj[j][0], 2) +
+                                       pow(new_obj[j][1], 2))]
+                            for j in range(len(new_obj))])
+
+        past_metrics = ([[math.sqrt(pow(new_obj_hist[frame-1][j][0], 2) +
+                                    pow(new_obj_hist[frame-1][j][1], 2))]
+                         for j in range(len(new_obj_hist[frame-1]))])
+
+        for i in range(len(present_metrics)):
+            for j in range(len(past_metrics)):
+                # if distances in two consecutive frames is small enough
+                if past_metrics[j] and \
+                   present_metrics[i][0] - past_metrics[j][0] < 10:
+                    frames_detected[i][0] += 1
 
     for i in range(len(new_obj)):
-        if new_obj[i]:
+        if new_obj[i] and frames_detected[i][0] > 1:
             #x[est_number + 1][::] = [new_obj[i][0], new_obj[i][1], 0, 0, 0, 0]
             x = np.append(x, [[new_obj[i][0], new_obj[i][1], 0, 0, 0, 0]],
                           axis=0)
             est_number += 1
+            frames_detected[i] = []
+    # append new frame
+    x_est.append([])
+    y_est.append([])
+    # append new state
+    for state in x:
+        x_est[frame].append(state[0])
+        y_est[frame].append(state[1])
     print('new frame!')
     # input()
 
