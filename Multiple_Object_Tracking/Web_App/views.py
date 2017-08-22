@@ -497,6 +497,12 @@ for frame in vid_fragment:
     # mark local maximas for every frame
     for point in maxima_points[i]:
         cv2.circle(frame, point, 3, (0, 0, 255), 1)
+    positions = []
+    if i < len(x_est):
+        for j in range(len(x_est[i])):
+            # positions.append((x_est[i][j], y_est[i][j]))
+            cv2.circle(frame, (int(x_est[i][j]), int(y_est[i][j])), 3,
+                       (0, 255, 0), 1)
     i += 1
     cv2.imshow('bin', frame)
 
