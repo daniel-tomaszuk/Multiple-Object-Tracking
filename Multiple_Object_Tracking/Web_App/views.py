@@ -285,8 +285,8 @@ def pair(prior, measurements):
 # [print(method) for method in dir(cap) if callable(getattr(cap, method))]
 
 dt = 1.
-R_var = 10
-Q_var = 0.01
+R_var = 1
+Q_var = 0.1
 # state covariance matrix - no initial covariances, variances only
 # [10^2 px, 10^2 px, ..] -
 P = np.diag([100, 100, 10, 10, 1, 1])
@@ -307,7 +307,7 @@ R = np.array([[R_var, 0.], [0., R_var]])  # measurement covariance matrix
 Q = np.diag([100, 100, 10, 10, 1, 1])  # model covariance matrix
 
 start_frame = 0
-stop_frame = 100
+stop_frame = 350
 font = cv2.FONT_HERSHEY_SIMPLEX
 vid_fragment = select_frames('static/files/CIMG4027.MOV', start_frame,
                              stop_frame)
@@ -381,6 +381,7 @@ frames_detected = []
 # x and y posterior positions (estimates)
 x_est = []
 y_est = []
+ff_nr = 0
 # kalman filter loop
 for frame in range(stop_frame):
     # measurements in one frame
@@ -482,7 +483,8 @@ for frame in range(stop_frame):
     for state in x:
         x_est[frame].append(state[0])
         y_est[frame].append(state[1])
-    print('new frame!')
+    print('new frame!', ff_nr)
+    ff_nr += 1
     # input()
 
 i = 0
@@ -505,16 +507,20 @@ for frame in vid_fragment:
                        (0, 255, 0), 1)
     i += 1
     cv2.imshow('bin', frame)
+# input('Press enter in the console to exit..')
+cv2.destroyAllWindows()
 
-# # input('Press enter in the console to exit..')
-# cv2.destroyAllWindows()
-# # plot point by means of matplotlib (plt)
-# # plt.plot(x, y, 'r.')
-# # # # [xmin xmax ymin ymax]
-# # plt.axis([0, width, height, 0])
-# # plt.xlabel('width [px]')
-# # plt.ylabel('height [px]')
-# # plt.title('Objects past points (not trajectories)')
-# # plt.grid()
-# # plt.show()
+for frame_positions in maxima_points:
+    for pos in frame_positions:
+        plt.plot(pos[0], pos[1], 'r.')
 
+for frame in range(len(x_est)):
+    for pos in range(len(x_est[frame])):
+        plt.plot(x_est[frame][pos], y_est[frame][pos], 'g.')
+# # [xmin xmax ymin ymax]
+plt.axis([0, width, height, 0])
+plt.xlabel('width [px]')
+plt.ylabel('height [px]')
+plt.title('Objects past points (not trajectories)')
+plt.grid()
+plt.show()
