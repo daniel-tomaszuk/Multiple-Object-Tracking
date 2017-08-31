@@ -1,3 +1,11 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Sun Aug 27 10:26:59 2017
+
+@author: dghy
+"""
+
 from django.shortcuts import render
 import numpy as np
 import cv2
@@ -13,7 +21,8 @@ from numpy import dot
 from filterpy.kalman import KalmanFilter
 from filterpy.common import Q_discrete_white_noise
 
-from munkres import Munkres, print_matrix
+from munkres import Munkres, DISALLOWED
+from scipy.optimize import linear_sum_assignment
 
 
 def otsu_binary(img):
@@ -83,7 +92,7 @@ def select_frames(video, frame_start, frame_stop):
         if cv2.waitKey(1) & 0xFF == ord('q') or not ret \
                 or (cap.get(1)) == frame_stop + 1:
             break
-    #     # img, text, (x,y), font, size, color, thickens
+    # # img, text, (x,y), font, size, color, thickens
     #     cv2.putText(frame, str(round(cap.get(0)/1000, 2)) + 's',
     #                 (10, 15), font, 0.5, (255, 255, 255), 1)
     #     cv2.putText(frame, 'f.nr:' + str(cap.get(1)),
@@ -156,7 +165,7 @@ def blob_detect(img_with_blobs):
     # circle corresponds to the size of blob
     im_with_keypoints = cv2.drawKeypoints(img_with_blobs, keypoints,
                                           np.array([]), (0, 0, 255),
-                        cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
+                                          cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
     return im_with_keypoints
 
 
@@ -169,14 +178,14 @@ def get_log_kernel(siz, std):
     :param std:
     :return:
     """
-    x = np.linspace(-siz, siz, 2*siz+1)
-    y = np.linspace(-siz, siz, 2*siz+1)
+    x = np.linspace(-siz, siz, 2 * siz + 1)
+    y = np.linspace(-siz, siz, 2 * siz + 1)
     x, y = np.meshgrid(x, y)
-    arg = -(x**2 + y**2) / (2*std**2)
+    arg = -(x ** 2 + y ** 2) / (2 * std ** 2)
     h = np.exp(arg)
     h[h < sys.float_info.epsilon * h.max()] = 0
-    h = h/h.sum() if h.sum() != 0 else h
-    h1 = h*(x**2 + y**2 - 2*std**2) / (std**4)
+    h = h / h.sum() if h.sum() != 0 else h
+    h1 = h * (x ** 2 + y ** 2 - 2 * std ** 2) / (std ** 4)
     return h1 - h1.mean()
 
 
@@ -215,7 +224,7 @@ def local_maxima(gray_image):
     for j in range(h):
         for k in range(w):
             # gray_image[j][k] has float values!
-            if maxima[j][k] and gray_image[j][k]*255 > 1:
+            if maxima[j][k] and gray_image[j][k] * 255 > 1:
                 # watch pixel coordinates output! (w, h)
                 result.append((k, j))
     return result
@@ -234,6 +243,7 @@ def munkres(matrix):
 
     # print_matrix(cost_matrix, msg='Cost matrix:')
     m = Munkres()
+
     indexes = m.compute(matrix)
     # print_matrix(matrix, msg='Highest profit through this matrix:')
     total = 0
@@ -281,6 +291,7 @@ def pair(prior, measurements):
             # print(square[index])
     return min_index, min_cost
 
+
 # list of all VideoCapture methods and attributes
 # [print(method) for method in dir(cap) if callable(getattr(cap, method))]
 
@@ -292,8 +303,8 @@ Q_var = 0.1
 P = np.diag([100, 100, 10, 10, 1, 1])
 # state transition matrix for 6 state variables (position - .. - acceleration,
 # x, y)
-F = np.array([[1, 0, dt, 0, 0.5*pow(dt, 2), 0],
-              [0, 1, 0, dt, 0, 0.5*pow(dt, 2)],
+F = np.array([[1, 0, dt, 0, 0.5 * pow(dt, 2), 0],
+              [0, 1, 0, dt, 0, 0.5 * pow(dt, 2)],
               [0, 0, 1, 0, dt, 0],
               [0, 0, 0, 1, 0, dt],
               [0, 0, 0, 0, 1, 0],
@@ -307,7 +318,7 @@ R = np.array([[R_var, 0.], [0., R_var]])  # measurement covariance matrix
 Q = np.diag([100, 100, 10, 10, 1, 1])  # model covariance matrix
 
 start_frame = 0
-stop_frame = 350
+stop_frame = 100
 font = cv2.FONT_HERSHEY_SIMPLEX
 vid_fragment = select_frames('static/files/CIMG4027.MOV', start_frame,
                              stop_frame)
@@ -329,7 +340,7 @@ for frame in vid_fragment:
     gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     for m in range(height):  # height
         for n in range(width):  # width
-            if n > 390 or m > 160:
+            if n > 385 or m > 160:
                 gray_frame[m][n] = 120
 
     # create a CLAHE object (Arguments are optional)
@@ -360,17 +371,14 @@ for frame in bin_frames:
         print(i)
     i += 1
 
-# required for append to work
-x = np.array([[None, None, None, None, None, None]])
+# create state vectors, max number of states - as much as frames
+x = np.zeros((stop_frame, 6))
 # state initialization - initial state is equal to measurements
 for i in range(len(maxima_points[0])):
-    x = np.append(x,
-                  [[maxima_points[0][i][0], maxima_points[0][i][1],
-                   0, 0, 0, 0]], axis=0)
-# removal of "None" values that were required for append
-x = x[1::]
+    x[i] = [maxima_points[0][i][0], maxima_points[0][i][1], 0, 0, 0, 0]
+
 # number of estimates at the start
-est_number = len(maxima_points[::][0])
+est_number = len(maxima_points[::][start_frame])
 # history of new objects appearance
 new_obj_hist = [[]]
 # difference between position of n-th object in m-1 frame and position of
@@ -378,149 +386,109 @@ new_obj_hist = [[]]
 diff_2 = [[]]
 # for how many frames given object was detected
 frames_detected = []
-# x and y posterior positions (estimates)
-x_est = []
-y_est = []
-ff_nr = 0
+# x and y posterior positions (estimates) for drawnings
+x_est = [[] for i in range(stop_frame)]
+y_est = [[] for i in range(stop_frame)]
+
+# variable for counting frames where object has no measurement
+str_trks = np.ones(stop_frame)
+str_trks[str_trks == 1] = None
+
+new_detection = []
+
+ff_nr = 0  # frame number
 # kalman filter loop
 for frame in range(stop_frame):
     # measurements in one frame
     measurements = maxima_points[::][frame]
-
+    # make list of lists, not tuples
+    measurements = [[meas[0], meas[1]] for meas in measurements]
     # count prior
     for i in range(est_number):
-        # prior
         x[i][::] = dot(F, x[i][::])
     P = dot(F, P).dot(F.T) + Q
-    # prepare for update phase -> get (prior - measurement) assignment
     S = dot(H, P).dot(H.T) + R
     K = dot(P, H.T).dot(inv(S))
+
+    ##########################################################################
+    # prepare for update phase -> get (prior - measurement) assignment
     # create cost matrix for munkres
     temp_matrix = np.array(x[0:est_number, 0:2])
-    # temp_matrix.shape = 9,2 (estimates only)
     temp_matrix = np.append(temp_matrix, measurements, axis=0)
-    # temp_matrix.shape = 16,2 (estimates + measurements)
     distance = pdist(temp_matrix, 'euclidean')  # returns vector
     # make square matrix out of vector
     distance = squareform(distance)
     # remove elements that are repeated - (0-1), (1-0) etc.
-    # print_matrix(distance)
-    distance = distance[0:est_number, 0:est_number]
-    index, cost = munkres(distance)
-    for i in range(est_number):
-        if index[i]:
-            if distance[index[i]] > 20:
-                # distance is too great for assignment
-                # incorrect assignment
-                index[i] = (-1, -1)
-        else:
-            # if no assignment for prior - measurement
-            # incorrect assignment
-            index[i] = (-1, -1)
-
+    distance = distance[0:est_number, est_number::]
+    # munkres
+    row_index, column_index = linear_sum_assignment(distance)
+    final_cost = distance[row_index, column_index].sum()
+    index = []
+    for i in range(len(row_index)):
+        # index(object, measurement)
+        index.append([row_index[i], column_index[i]])
+        ##########################################################################
+    # check if assignment is likely to be correct
+    for i in range(len(index)):
+        print(distance[index[i][0], index[i][1]])
+        if distance[index[i][0], index[i][1]] > 50:
+            # distance to great - incorrect assignment
+            index[i][1] = -1
+    ##########################################################################
     # update phase
-    # make measurements as list of lists, not tuples
-    measurements = [[meas[0], meas[1]] for meas in measurements]
-    k = 0
-    for i in range(est_number):
-        # if there was successful munkres assignment
-        if index[i][0] >= 0 and index[i][1] >= 0:
-            m = 0
-            for ind in index:
-                # find object that should get measurement next
-                if k == ind[0] and ind[1] < len(measurements):
-                    # count residual y: measurement - state
-                    y = np.array([measurements[ind[1]] - dot(H, x[k, ::])])
-                    # posterior
-                    x[k, ::] = x[k, ::] + dot(K, y.T).T
-                m += 1
-        k += 1
+    for i in range(len(index)):
+        # find object that should get measurement next
+        # count residual y: measurement - state
+        if index[i][1] > 0:
+            #            try:
+            y = np.array([measurements[index[i][1]] - dot(H, x[i, ::])])
+            # posterior
+            x[i, ::] = x[i, ::] + dot(K, y.T).T
+            # append new positions
+        if x[i][0]:
+            x_est[frame].append(x[i, 0])
+            y_est[frame].append(x[i, 1])
     # posterior state covariance matrix
     P = dot(np.identity(6) - dot(K, H), P)
 
-    # finding new object and creating new prior for it
-    new_obj = []
-    obj_list = [index[i][0] for i in range(len(index))]
-    # if there is more measurements than indexes from munkres - new object
+    new_index = []
+    measurment_indexes = [index[i][1] for i in range(len(index))]
     for i in range(len(measurements)):
-        if i not in obj_list:
-            new_obj.append(measurements[i])
-            # create empty list for counting in how many frames
-            # object was visible
-            frames_detected.append([1])
-    # check if new object was detected before - do not add objects that are
-    # detected for the first time
-    # create history every day ( frame:) )
-    new_obj_hist.append(new_obj)
-    # count metrics for present and past new objects
-    if frame > 0:
-        present_metrics = ([[math.sqrt(pow(new_obj[j][0], 2) +
-                                       pow(new_obj[j][1], 2))]
-                            for j in range(len(new_obj))])
+        if i not in measurment_indexes:
+            new_index.append(i)
+    new_detection.append(
+        [measurements[new_index[i]] for i in range(len(new_index))])
 
-        past_metrics = ([[math.sqrt(pow(new_obj_hist[frame-1][j][0], 2) +
-                                    pow(new_obj_hist[frame-1][j][1], 2))]
-                         for j in range(len(new_obj_hist[frame-1]))])
+    ##########################################################################
+    # draw measurements point loop
 
-        for i in range(len(present_metrics)):
-            for j in range(len(past_metrics)):
-                # if distances in two consecutive frames is small enough
-                if past_metrics[j] and \
-                   present_metrics[i][0] - past_metrics[j][0] < 10:
-                    frames_detected[i][0] += 1
-
-    for i in range(len(new_obj)):
-        if new_obj[i] and frames_detected[i][0] > 1:
-            #x[est_number + 1][::] = [new_obj[i][0], new_obj[i][1], 0, 0, 0, 0]
-            x = np.append(x, [[new_obj[i][0], new_obj[i][1], 0, 0, 0, 0]],
-                          axis=0)
-            est_number += 1
-            frames_detected[i] = []
-    # append new frame
-    x_est.append([])
-    y_est.append([])
-    # append new state
-    for state in x:
-        x_est[frame].append(state[0])
-        y_est[frame].append(state[1])
-    print('new frame!', ff_nr)
-    ff_nr += 1
-    # input()
-
-i = 0
-# draw measurements point loop
-for frame in vid_fragment:
     if cv2.waitKey(30) & 0xFF == ord('q'):
         break
     # img, text, (x,y), font, size, color, thickens
-    cv2.putText(frame, 'f.nr:' + str(start_frame + i + 1),
+    cv2.putText(vid_fragment[frame], 'f.nr:' + str(ff_nr),
                 (100, 15), font, 0.5, (254, 254, 254), 1)
 
     # mark local maximas for every frame
-    for point in maxima_points[i]:
-        cv2.circle(frame, point, 3, (0, 0, 255), 1)
-    positions = []
-    if i < len(x_est):
-        for j in range(len(x_est[i])):
+    for point in maxima_points[frame]:
+        cv2.circle(vid_fragment[frame], point, 5, (0, 0, 255), 1)
+
+    for j in range(len(x)):
+        if x[j][0] and x[j][1]:
             # positions.append((x_est[i][j], y_est[i][j]))
-            cv2.circle(frame, (int(x_est[i][j]), int(y_est[i][j])), 3,
-                       (0, 255, 0), 1)
-    i += 1
-    cv2.imshow('bin', frame)
-# input('Press enter in the console to exit..')
+            cv2.circle(vid_fragment[frame], (int(x[j][0]),
+                                             int(x[j][1])), 3, (0, 255, 0), 1)
+
+    cv2.imshow('bin', vid_fragment[frame])
+    cv2.waitKey(10)
+
+    print('new frame!', ff_nr)
+    ff_nr += 1
+# input()
+
 cv2.destroyAllWindows()
 
-for frame_positions in maxima_points:
-    for pos in frame_positions:
-        plt.plot(pos[0], pos[1], 'r.')
+print('\nFinal estimates number:', est_number)
 
-for frame in range(len(x_est)):
-    for pos in range(len(x_est[frame])):
-        plt.plot(x_est[frame][pos], y_est[frame][pos], 'g.')
-# # [xmin xmax ymin ymax]
-plt.axis([0, width, height, 0])
-plt.xlabel('width [px]')
-plt.ylabel('height [px]')
-plt.title('Objects past points (not trajectories)')
-plt.grid()
-plt.show()
+print('EOF - DONE')
+
+
