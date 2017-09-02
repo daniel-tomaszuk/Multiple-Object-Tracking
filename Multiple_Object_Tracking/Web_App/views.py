@@ -424,8 +424,11 @@ for frame in range(stop_frame):
     # prepare for update phase -> get (prior - measurement) assignment
     posterior_list = []
     for i in range(est_number):
+
         if not np.isnan(x[i][0]) and not np.isnan(x[i][1]):
             posterior_list.append(i)
+            print(i)
+    print(posterior_list)
 
     print('state\n', x[0:est_number, 0:2])
     print('\n')
@@ -440,7 +443,7 @@ for frame in range(stop_frame):
     temp_distance = distance
     # remove elements that are repeated - (0-1), (1-0) etc.
     #    distance = distance[est_number::, 0:est_number]
-    distance = distance[len(posterior_list)::, 0:len(posterior_list)]
+    distance = distance[0:len(posterior_list), len(posterior_list)::]
 
     # munkres
     row_index, column_index = linear_sum_assignment(distance)
@@ -450,67 +453,84 @@ for frame in range(stop_frame):
         # index(object, measurement)
         index.append([row_index[i], column_index[i]])
 
-    ##########################################################################
+        ##########################################################################
     # check if assignment is likely to be correct
     reject = np.ones(len(posterior_list))
     for i in range(len(posterior_list)):
         try:
             print('distance', index[i], distance[index[i][0], index[i][1]])
             #        print(distance[index[i][0], index[i][1]])
-            if distance[index[i][0], index[i][1]] >= 10.:
+            if distance[index[i][0], index[i][1]] >= 30.:
                 # distance to great - incorrect assignment
                 #            index[i][1] = -1
                 reject[i] = 0
         except IndexError:
             reject[i] = 0
+
+
+
             #    index *= reject
 
     ##########################################################################
 
     print('index before:\n', index)
-    #    for i in range(len(posterior_list)):
-    #        if i != posterior_list[i]:
-    #            index[i][0] = posterior_list[i]
-    #            print('correction')
-    #
-    #    print('index after:\n', index)
-    ##########################################################################
+    for i in range(len(posterior_list)):
+        if i + 1 >= len(index):
+            break
+        if abs(index[i][0] - index[i + 1][0]) > 1:
+            continue
+        try:
+            if i != posterior_list[i]:
+                index[i][0] = posterior_list[i]
+                #            print('correction')
+        except IndexError:
+            print('error', i)
+            pass
+    print('index after:\n', index)
+    #####################################################################
+
     # update phase
     for i in range(len(index)):
         # find object that should get measurement next
         # count residual y: measurement - state
         if index[i][1] >= 0:
+            state_index = index[i][0]
             #            try:
-            y = np.array([measurements[index[i][1]] - dot(H, x[i, ::])])
+            y = np.array([measurements[index[i][1]] - \
+                          dot(H, x[state_index, ::])])
             # posterior
-            x[i, ::] = x[i, ::] + dot(K, y.T).T
+            x[state_index, ::] = x[state_index, ::] + dot(K, y.T).T
             # append new positions
         if x[i][0] and x[i][1]:
             x_est[frame].append(x[i, 0])
             y_est[frame].append(x[i, 1])
     # posterior state covariance matrix
     P = dot(np.identity(6) - dot(K, H), P)
-    #########################################################################
+    print('posterior\n', x[0:est_number, 0:2])
+    ##########################################################################
     # find new objects and create new states for them
     new_index = []
     measurment_indexes = []
     for i in range(len(index)):
         if index[i][1] >= 0.:
+            # measurements that have assignment
             measurment_indexes.append(index[i][1])
 
     for i in range(len(measurements)):
         if i not in measurment_indexes:
+            # find measurements that don't have assignments
             new_index.append(i)
     new_detection.append([measurements[new_index[i]]
                           for i in range(len(new_index))])
-
+    # for every detections in the last frame
     for i in range(len(new_detection[len(new_detection) - 1])):
         if new_detection[frame][i]:
-            x[est_number + 1, ::] = [new_detection[frame][i][0],
-                                     new_detection[frame][i][1], 0, 0, 0, 0]
+            x[est_number, ::] = [new_detection[frame][i][0],
+                                 new_detection[frame][i][1], 0, 0, 0, 0]
             est_number += 1
             print('state added', est_number)
-    ##########################################################################
+            print('new posterior\n', x[0:est_number, 0:2])
+            ##########################################################################
     # find states without measurements and remove them
     no_track_list = []
     for i in range(len(reject)):
