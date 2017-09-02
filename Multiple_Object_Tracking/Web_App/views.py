@@ -12,6 +12,7 @@ import cv2
 import sys
 import math
 import matplotlib.pyplot as plt
+from numpy import ma  # masked arrays
 
 from scipy.spatial.distance import pdist
 from scipy.spatial.distance import squareform
@@ -317,10 +318,10 @@ R = np.array([[R_var, 0.], [0., R_var]])  # measurement covariance matrix
 # Q must be the same shape as P
 Q = np.diag([100, 100, 10, 10, 1, 1])  # model covariance matrix
 
-start_frame = 0
-stop_frame = 100
+start_frame = 400
+stop_frame = 500
 font = cv2.FONT_HERSHEY_SIMPLEX
-vid_fragment = select_frames('static/files/CIMG4027.MOV', start_frame,
+vid_fragment = select_frames('CIMG4027.MOV', start_frame,
                              stop_frame)
 
 height = vid_fragment[0].shape[0]
@@ -374,11 +375,18 @@ for frame in bin_frames:
 # create state vectors, max number of states - as much as frames
 x = np.zeros((stop_frame, 6))
 # state initialization - initial state is equal to measurements
+m = 0
 for i in range(len(maxima_points[0])):
-    x[i] = [maxima_points[0][i][0], maxima_points[0][i][1], 0, 0, 0, 0]
+    if maxima_points[0][i][0] > 0 and maxima_points[0][i][1] > 0:
+        x[m] = [maxima_points[0][i][0], maxima_points[0][i][1], 0, 0, 0, 0]
+        m += 1
 
+est_number = 0
 # number of estimates at the start
-est_number = len(maxima_points[::][start_frame])
+for point in maxima_points[::][0]:
+    if point[0] > 0 and point[1] > 0:
+        est_number += 1
+
 # history of new objects appearance
 new_obj_hist = [[]]
 # difference between position of n-th object in m-1 frame and position of
@@ -391,8 +399,7 @@ x_est = [[] for i in range(stop_frame)]
 y_est = [[] for i in range(stop_frame)]
 
 # variable for counting frames where object has no measurement
-str_trks = np.ones(stop_frame)
-str_trks[str_trks == 1] = None
+striked_tracks = np.zeros(stop_frame)
 
 new_detection = []
 
@@ -400,9 +407,12 @@ ff_nr = 0  # frame number
 # kalman filter loop
 for frame in range(stop_frame):
     # measurements in one frame
-    measurements = maxima_points[::][frame]
-    # make list of lists, not tuples
-    measurements = [[meas[0], meas[1]] for meas in measurements]
+    frame_measurements = maxima_points[::][frame]
+    measurements = []
+    # make list of lists, not tuples; don't take zeros (assuming it's image)
+    for meas in frame_measurements:
+        if meas[0] > 0 and meas[1] > 0:
+            measurements.append([meas[0], meas[1]])
     # count prior
     for i in range(est_number):
         x[i][::] = dot(F, x[i][::])
@@ -412,14 +422,26 @@ for frame in range(stop_frame):
 
     ##########################################################################
     # prepare for update phase -> get (prior - measurement) assignment
-    # create cost matrix for munkres
-    temp_matrix = np.array(x[0:est_number, 0:2])
+    posterior_list = []
+    for i in range(est_number):
+        if not np.isnan(x[i][0]) and not np.isnan(x[i][1]):
+            posterior_list.append(i)
+
+    print('state\n', x[0:est_number, 0:2])
+    print('\n')
+    #    temp_matrix = np.array(x[0:est_number, 0:2])
+    temp_matrix = np.array(x[posterior_list, 0:2])
     temp_matrix = np.append(temp_matrix, measurements, axis=0)
+    print(temp_matrix)
     distance = pdist(temp_matrix, 'euclidean')  # returns vector
+
     # make square matrix out of vector
     distance = squareform(distance)
+    temp_distance = distance
     # remove elements that are repeated - (0-1), (1-0) etc.
-    distance = distance[0:est_number, est_number::]
+    #    distance = distance[est_number::, 0:est_number]
+    distance = distance[len(posterior_list)::, 0:len(posterior_list)]
+
     # munkres
     row_index, column_index = linear_sum_assignment(distance)
     final_cost = distance[row_index, column_index].sum()
@@ -427,37 +449,83 @@ for frame in range(stop_frame):
     for i in range(len(row_index)):
         # index(object, measurement)
         index.append([row_index[i], column_index[i]])
-        ##########################################################################
+
+    ##########################################################################
     # check if assignment is likely to be correct
-    for i in range(len(index)):
-        print(distance[index[i][0], index[i][1]])
-        if distance[index[i][0], index[i][1]] > 50:
-            # distance to great - incorrect assignment
-            index[i][1] = -1
+    reject = np.ones(len(posterior_list))
+    for i in range(len(posterior_list)):
+        try:
+            print('distance', index[i], distance[index[i][0], index[i][1]])
+            #        print(distance[index[i][0], index[i][1]])
+            if distance[index[i][0], index[i][1]] >= 10.:
+                # distance to great - incorrect assignment
+                #            index[i][1] = -1
+                reject[i] = 0
+        except IndexError:
+            reject[i] = 0
+            #    index *= reject
+
+    ##########################################################################
+
+    print('index before:\n', index)
+    #    for i in range(len(posterior_list)):
+    #        if i != posterior_list[i]:
+    #            index[i][0] = posterior_list[i]
+    #            print('correction')
+    #
+    #    print('index after:\n', index)
     ##########################################################################
     # update phase
     for i in range(len(index)):
         # find object that should get measurement next
         # count residual y: measurement - state
-        if index[i][1] > 0:
+        if index[i][1] >= 0:
             #            try:
             y = np.array([measurements[index[i][1]] - dot(H, x[i, ::])])
             # posterior
             x[i, ::] = x[i, ::] + dot(K, y.T).T
             # append new positions
-        if x[i][0]:
+        if x[i][0] and x[i][1]:
             x_est[frame].append(x[i, 0])
             y_est[frame].append(x[i, 1])
     # posterior state covariance matrix
     P = dot(np.identity(6) - dot(K, H), P)
-
+    #########################################################################
+    # find new objects and create new states for them
     new_index = []
-    measurment_indexes = [index[i][1] for i in range(len(index))]
+    measurment_indexes = []
+    for i in range(len(index)):
+        if index[i][1] >= 0.:
+            measurment_indexes.append(index[i][1])
+
     for i in range(len(measurements)):
         if i not in measurment_indexes:
             new_index.append(i)
-    new_detection.append(
-        [measurements[new_index[i]] for i in range(len(new_index))])
+    new_detection.append([measurements[new_index[i]]
+                          for i in range(len(new_index))])
+
+    for i in range(len(new_detection[len(new_detection) - 1])):
+        if new_detection[frame][i]:
+            x[est_number + 1, ::] = [new_detection[frame][i][0],
+                                     new_detection[frame][i][1], 0, 0, 0, 0]
+            est_number += 1
+            print('state added', est_number)
+    ##########################################################################
+    # find states without measurements and remove them
+    no_track_list = []
+    for i in range(len(reject)):
+        if not reject[i]:
+            no_track_list.append(i)
+            #    print('no_trk_list', no_track_list)
+    for track in no_track_list:
+        if track >= 0:
+            striked_tracks[track] += 1
+            print('track/strikes', track, striked_tracks[track])
+    for i in range(len(striked_tracks)):
+        if striked_tracks[i] >= 1:
+            x[i, ::] = [None, None, None, None, None, None]
+
+            print('state_removed', i)
 
     ##########################################################################
     # draw measurements point loop
@@ -469,26 +537,34 @@ for frame in range(stop_frame):
                 (100, 15), font, 0.5, (254, 254, 254), 1)
 
     # mark local maximas for every frame
-    for point in maxima_points[frame]:
-        cv2.circle(vid_fragment[frame], point, 5, (0, 0, 255), 1)
+    measurement_number = 0
+    for point in measurements:
+        cv2.circle(vid_fragment[frame], (point[0], point[1]), 5,
+                   (0, 0, 255), 1)
+        cv2.putText(vid_fragment[frame], str(measurement_number),
+                    (point[0], point[1]), font, 0.5, (0, 0, 254), 1)
+        measurement_number += 1
 
     for j in range(len(x)):
-        if x[j][0] and x[j][1]:
+        if x[j][0] > 0 and x[j][1] > 0:
             # positions.append((x_est[i][j], y_est[i][j]))
             cv2.circle(vid_fragment[frame], (int(x[j][0]),
                                              int(x[j][1])), 3, (0, 255, 0), 1)
+            cv2.putText(vid_fragment[frame], str(j),
+                        (int(x[j][0] + 10), int(x[j][1] + 20)),
+                        font, 0.5, (0, 254, 0), 1)
+            #   TO DO:
+            #       find a way to menage data consistency with Nan values!
 
     cv2.imshow('bin', vid_fragment[frame])
     cv2.waitKey(10)
 
-    print('new frame!', ff_nr)
+    print(ff_nr, '--------------------------------------')
     ff_nr += 1
-# input()
+    input()
 
 cv2.destroyAllWindows()
 
 print('\nFinal estimates number:', est_number)
 
 print('EOF - DONE')
-
-
