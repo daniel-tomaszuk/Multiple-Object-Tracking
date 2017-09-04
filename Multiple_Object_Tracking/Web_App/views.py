@@ -318,8 +318,8 @@ R = np.array([[R_var, 0.], [0., R_var]])  # measurement covariance matrix
 # Q must be the same shape as P
 Q = np.diag([100, 100, 10, 10, 1, 1])  # model covariance matrix
 
-start_frame = 400
-stop_frame = 500
+start_frame = 0
+stop_frame = 1000
 font = cv2.FONT_HERSHEY_SIMPLEX
 vid_fragment = select_frames('CIMG4027.MOV', start_frame,
                              stop_frame)
@@ -400,6 +400,7 @@ y_est = [[] for i in range(stop_frame)]
 
 # variable for counting frames where object has no measurement
 striked_tracks = np.zeros(stop_frame)
+removed_states = []
 
 new_detection = []
 
@@ -424,7 +425,6 @@ for frame in range(stop_frame):
     # prepare for update phase -> get (prior - measurement) assignment
     posterior_list = []
     for i in range(est_number):
-
         if not np.isnan(x[i][0]) and not np.isnan(x[i][1]):
             posterior_list.append(i)
             print(i)
@@ -453,53 +453,34 @@ for frame in range(stop_frame):
         # index(object, measurement)
         index.append([row_index[i], column_index[i]])
 
-        ##########################################################################
-    # check if assignment is likely to be correct
+    ##########################################################################
+    # index correction - take past states into account
+    removed_states.sort()
+    for removed_index in removed_states:
+        for i in range(len(index)):
+            if index[i][0] >= removed_index:
+                index[i][0] += 1
+    ##########################################################################
+    # find object to reject
+    object_list = [index[i][0] for i in range(len(index))]
     reject = np.ones(len(posterior_list))
-    for i in range(len(posterior_list)):
-        try:
-            print('distance', index[i], distance[index[i][0], index[i][1]])
-            #        print(distance[index[i][0], index[i][1]])
-            if distance[index[i][0], index[i][1]] >= 30.:
-                # distance to great - incorrect assignment
-                #            index[i][1] = -1
-                reject[i] = 0
-        except IndexError:
+    i = 0
+    for post_index in posterior_list:
+        if post_index not in object_list:
             reject[i] = 0
-
-
-
-            #    index *= reject
+        i += 1
 
     ##########################################################################
-
-    print('index before:\n', index)
-    for i in range(len(posterior_list)):
-        if i + 1 >= len(index):
-            break
-        if abs(index[i][0] - index[i + 1][0]) > 1:
-            continue
-        try:
-            if i != posterior_list[i]:
-                index[i][0] = posterior_list[i]
-                #            print('correction')
-        except IndexError:
-            print('error', i)
-            pass
-    print('index after:\n', index)
-    #####################################################################
 
     # update phase
     for i in range(len(index)):
         # find object that should get measurement next
         # count residual y: measurement - state
         if index[i][1] >= 0:
-            state_index = index[i][0]
-            #            try:
             y = np.array([measurements[index[i][1]] - \
-                          dot(H, x[state_index, ::])])
+                          dot(H, x[index[i][0], ::])])
             # posterior
-            x[state_index, ::] = x[state_index, ::] + dot(K, y.T).T
+            x[index[i][0], ::] = x[index[i][0], ::] + dot(K, y.T).T
             # append new positions
         if x[i][0] and x[i][1]:
             x_est[frame].append(x[i, 0])
@@ -510,14 +491,14 @@ for frame in range(stop_frame):
     ##########################################################################
     # find new objects and create new states for them
     new_index = []
-    measurment_indexes = []
+    measurement_indexes = []
     for i in range(len(index)):
         if index[i][1] >= 0.:
             # measurements that have assignment
-            measurment_indexes.append(index[i][1])
+            measurement_indexes.append(index[i][1])
 
     for i in range(len(measurements)):
-        if i not in measurment_indexes:
+        if i not in measurement_indexes:
             # find measurements that don't have assignments
             new_index.append(i)
     new_detection.append([measurements[new_index[i]]
@@ -535,7 +516,7 @@ for frame in range(stop_frame):
     no_track_list = []
     for i in range(len(reject)):
         if not reject[i]:
-            no_track_list.append(i)
+            no_track_list.append(posterior_list[i])
             #    print('no_trk_list', no_track_list)
     for track in no_track_list:
         if track >= 0:
@@ -544,7 +525,8 @@ for frame in range(stop_frame):
     for i in range(len(striked_tracks)):
         if striked_tracks[i] >= 1:
             x[i, ::] = [None, None, None, None, None, None]
-
+            if i not in removed_states:
+                removed_states.append(i)
             print('state_removed', i)
 
     ##########################################################################
@@ -573,8 +555,6 @@ for frame in range(stop_frame):
             cv2.putText(vid_fragment[frame], str(j),
                         (int(x[j][0] + 10), int(x[j][1] + 20)),
                         font, 0.5, (0, 254, 0), 1)
-            #   TO DO:
-            #       find a way to menage data consistency with Nan values!
 
     cv2.imshow('bin', vid_fragment[frame])
     cv2.waitKey(10)
