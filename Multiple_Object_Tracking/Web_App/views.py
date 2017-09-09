@@ -320,7 +320,7 @@ Q = np.diag([100, 100, 10, 10, 1, 1])  # model covariance matrix
 
 #############################################################################
 start_frame = 0
-stop_frame = 2000
+stop_frame = 200
 #############################################################################
 
 font = cv2.FONT_HERSHEY_SIMPLEX
@@ -492,9 +492,9 @@ for frame in range(stop_frame):
             # posterior
             x[index[i][0], ::] = x[index[i][0], ::] + dot(K, y.T).T
             # append new positions
-        if x[i][0] and x[i][1]:
-            x_est[frame].append(x[i, 0])
-            y_est[frame].append(x[i, 1])
+        #        if x[i][0] and x[i][1]:
+        x_est[index[i][0]].append([x[index[i][0], 0]])
+        y_est[index[i][0]].append([x[index[i][0], 1]])
     # posterior state covariance matrix
     P = dot(np.identity(6) - dot(K, H), P)
     print('posterior\n', x[0:est_number, 0:2])
@@ -578,5 +578,34 @@ for frame in range(stop_frame):
 cv2.destroyAllWindows()
 
 print('\nFinal estimates number:', est_number)
+
+##############################################################################
+# plot raw measurements
+for frame_positions in maxima_points:
+    for pos in frame_positions:
+        plt.plot(pos[0], pos[1], 'r.')
+plt.axis([0, width, height, 0])
+plt.xlabel('width [px]')
+plt.ylabel('height [px]')
+plt.title('Objects raw measurements')
+plt.grid()
+plt.show()
+
+##############################################################################
+# plot estimated trajectories
+for ind in range(est_number):
+    if len(x_est[ind]):
+        #        for pos in range(len(x_est[ind])):
+        #            if not np.isnan(x_est[ind][pos]):
+        #                plt.plot(x_est[ind][pos], y_est[ind][pos], 'g.')
+        plt.plot(x_est[ind][::], y_est[ind][::], 'g-')
+# print(frame)
+#  [xmin xmax ymin ymax]
+plt.axis([0, width, height, 0])
+plt.xlabel('width [px]')
+plt.ylabel('height [px]')
+plt.title('Objects estimated trajectories')
+plt.grid()
+plt.show()
 
 print('EOF - DONE')
