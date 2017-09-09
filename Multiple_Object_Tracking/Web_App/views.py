@@ -324,7 +324,7 @@ stop_frame = 200
 #############################################################################
 
 font = cv2.FONT_HERSHEY_SIMPLEX
-vid_fragment = select_frames('CIMG4027.MOV', start_frame,
+vid_fragment = select_frames('static/files/CIMG4027.MOV', start_frame,
                              stop_frame)
 
 height = vid_fragment[0].shape[0]
@@ -578,7 +578,7 @@ for frame in range(stop_frame):
 cv2.destroyAllWindows()
 
 print('\nFinal estimates number:', est_number)
-
+print('\nTrajectories drawing...')
 ##############################################################################
 # plot raw measurements
 for frame_positions in maxima_points:
