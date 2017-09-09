@@ -318,8 +318,11 @@ R = np.array([[R_var, 0.], [0., R_var]])  # measurement covariance matrix
 # Q must be the same shape as P
 Q = np.diag([100, 100, 10, 10, 1, 1])  # model covariance matrix
 
+#############################################################################
 start_frame = 0
-stop_frame = 1000
+stop_frame = 2000
+#############################################################################
+
 font = cv2.FONT_HERSHEY_SIMPLEX
 vid_fragment = select_frames('CIMG4027.MOV', start_frame,
                              stop_frame)
@@ -448,10 +451,12 @@ for frame in range(stop_frame):
     # munkres
     row_index, column_index = linear_sum_assignment(distance)
     final_cost = distance[row_index, column_index].sum()
+    unit_cost = []
     index = []
     for i in range(len(row_index)):
         # index(object, measurement)
         index.append([row_index[i], column_index[i]])
+        unit_cost.append(distance[row_index[i], column_index[i]])
 
     ##########################################################################
     # index correction - take past states into account
@@ -460,17 +465,22 @@ for frame in range(stop_frame):
         for i in range(len(index)):
             if index[i][0] >= removed_index:
                 index[i][0] += 1
-    ##########################################################################
+                ##########################################################################
     # find object to reject
-    object_list = [index[i][0] for i in range(len(index))]
+    state_list = [index[i][0] for i in range(len(index))]
     reject = np.ones(len(posterior_list))
     i = 0
     for post_index in posterior_list:
-        if post_index not in object_list:
+        if post_index not in state_list:
             reject[i] = 0
         i += 1
+    # check if distance (residual) isn't to high for assignment
+    for i in range(len(unit_cost)):
+        if unit_cost[i] > 20:
+            print('cost to high, removing', i)
+            reject[i] = 0
 
-    ##########################################################################
+    #####################################################################
 
     # update phase
     for i in range(len(index)):
@@ -491,21 +501,21 @@ for frame in range(stop_frame):
     ##########################################################################
     # find new objects and create new states for them
     new_index = []
-    measurement_indexes = []
+    measurment_indexes = []
     for i in range(len(index)):
         if index[i][1] >= 0.:
             # measurements that have assignment
-            measurement_indexes.append(index[i][1])
+            measurment_indexes.append(index[i][1])
 
     for i in range(len(measurements)):
-        if i not in measurement_indexes:
+        if i not in measurment_indexes:
             # find measurements that don't have assignments
             new_index.append(i)
     new_detection.append([measurements[new_index[i]]
                           for i in range(len(new_index))])
     # for every detections in the last frame
     for i in range(len(new_detection[len(new_detection) - 1])):
-        if new_detection[frame][i]:
+        if new_detection[frame][i] and new_detection[frame][i][0] > 380:
             x[est_number, ::] = [new_detection[frame][i][0],
                                  new_detection[frame][i][1], 0, 0, 0, 0]
             est_number += 1
@@ -561,7 +571,9 @@ for frame in range(stop_frame):
 
     print(ff_nr, '--------------------------------------')
     ff_nr += 1
-    input()
+    print(removed_states)
+    print(index)
+# input()
 
 cv2.destroyAllWindows()
 
