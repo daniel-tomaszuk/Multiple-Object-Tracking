@@ -307,9 +307,13 @@ def video_analise(video, start_f, stop_f):
              vid_fragment - selected fragment of given video in the format:
                             vid_fragment[frame_nr][3D pixel matrix, BGR]
     """
-    vid_fragment = select_frames(video, start_f, stop_f)
-    height = vid_fragment[0].shape[0]
-    width = vid_fragment[0].shape[1]
+    vid_frag = select_frames(video, start_f, stop_f)
+    try:
+        height = vid_frag[0].shape[0]
+        width = vid_frag[0].shape[1]
+    except IndexError:
+        height = 0
+        width = 0
     # kernel for morphological operations
     # check cv2.getStructuringElement() doc for more info
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (19, 19))
@@ -319,7 +323,7 @@ def video_analise(video, start_f, stop_f):
     i = 0
     bin_frames = []
     # preprocess image loop
-    for frame in vid_fragment:
+    for frame in vid_frag:
         if cv2.waitKey(15) & 0xFF == ord('q'):
             break
         gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
@@ -354,20 +358,22 @@ def video_analise(video, start_f, stop_f):
         if i % 10 == 0:
             print(i)
         i += 1
-    return maxima_points, vid_fragment
+    return maxima_points, vid_frag
 
 
-def kalman(maxima_points):
+def kalman(max_points):
     """
     Kalman Filter function. Takes measurements from video analyse function
     and estimates positions of detected objects. Munkres algorithm is used for
     assignments between estimates (states) and measurements.
-    :param maxima_points: measurements.
+    :param max_points: measurements.
     :return: x_est, y_est - estimates of x and y positions in the following
              format: x_est[index_of_object][frame] gives x position of object
              with index = [index_of_object] in the frame = [frame]. The same
              goes with y positions.
     """
+    index_error = 0
+    value_error = 0
     # step of filter
     dt = 1.
     R_var = 1  # measurements variance between x-x and y-y
@@ -396,16 +402,24 @@ def kalman(maxima_points):
     x = np.zeros((stop_frame, 6))
     # state initialization - initial state is equal to measurements
     m = 0
-    for i in range(len(maxima_points[0])):
-        if maxima_points[0][i][0] > 0 and maxima_points[0][i][1] > 0:
-            x[m] = [maxima_points[0][i][0], maxima_points[0][i][1], 0, 0, 0, 0]
-            m += 1
+    try:
+        for i in range(len(max_points[0])):
+            if max_points[0][i][0] > 0 and max_points[0][i][1] > 0:
+                x[m] = [max_points[0][i][0], max_points[0][i][1],
+                        0, 0, 0, 0]
+                m += 1
+    # required for django runserver tests
+    except IndexError:
+        index_error = 1
 
     est_number = 0
     # number of estimates at the start
-    for point in maxima_points[::][0]:
-        if point[0] > 0 and point[1] > 0:
-            est_number += 1
+    try:
+        for point in max_points[::][0]:
+            if point[0] > 0 and point[1] > 0:
+                est_number += 1
+    except IndexError:
+        index_error = 1
 
     # history of new objects appearance
     new_obj_hist = [[]]
@@ -426,12 +440,17 @@ def kalman(maxima_points):
     # kalman filter loop
     for frame in range(stop_frame):
         # measurements in one frame
-        frame_measurements = maxima_points[::][frame]
+        try:
+            frame_measurements = max_points[::][frame]
+        except IndexError:
+            index_error = 1
+
         measurements = []
         # make list of lists, not tuples; don't take zeros, assuming it's image
-        for meas in frame_measurements:
-            if meas[0] > 0 and meas[1] > 0:
-                measurements.append([meas[0], meas[1]])
+        if not index_error:
+            for meas in frame_measurements:
+                if meas[0] > 0 and meas[1] > 0:
+                    measurements.append([meas[0], meas[1]])
         # count prior
         for i in range(est_number):
             x[i][::] = dot(F, x[i][::])
@@ -450,9 +469,13 @@ def kalman(maxima_points):
         print('state\n', x[0:est_number, 0:2])
         print('\n')
         #    temp_matrix = np.array(x[0:est_number, 0:2])
-        temp_matrix = np.array(x[posterior_list, 0:2])
-        temp_matrix = np.append(temp_matrix, measurements, axis=0)
-        print(temp_matrix)
+        try:
+            temp_matrix = np.array(x[posterior_list, 0:2])
+            temp_matrix = np.append(temp_matrix, measurements, axis=0)
+        except ValueError:
+            value_error = 1
+
+        # print(temp_matrix)
         distance = pdist(temp_matrix, 'euclidean')  # returns vector
 
         # make square matrix out of vector
@@ -554,48 +577,53 @@ def kalman(maxima_points):
                 print('state_removed', i)
 
         ######################################################################
-        # draw measurements point loop
-        if cv2.waitKey(30) & 0xFF == ord('q'):
-            break
-        # img, text, (x,y), font, size, color, thickens
-        cv2.putText(vid_fragment[frame], 'f.nr:' + str(ff_nr),
-                    (100, 15), font, 0.5, (254, 254, 254), 1)
+        if not index_error or  not value_error:
+            # draw measurements point loop
+            if cv2.waitKey(30) & 0xFF == ord('q'):
+                break
+            # img, text, (x,y), font, size, color, thickens
+            cv2.putText(vid_fragment[frame], 'f.nr:' + str(ff_nr),
+                        (100, 15), font, 0.5, (254, 254, 254), 1)
 
-        # mark local maximas for every frame
-        measurement_number = 0
-        for point in measurements:
-            cv2.circle(vid_fragment[frame], (point[0], point[1]), 5,
-                       (0, 0, 255), 1)
-            cv2.putText(vid_fragment[frame], str(measurement_number),
-                        (point[0], point[1]), font, 0.5, (0, 0, 254), 1)
-            measurement_number += 1
+            # mark local maximas for every frame
+            measurement_number = 0
+            for point in measurements:
+                cv2.circle(vid_fragment[frame], (point[0], point[1]), 5,
+                           (0, 0, 255), 1)
+                cv2.putText(vid_fragment[frame], str(measurement_number),
+                            (point[0], point[1]), font, 0.5, (0, 0, 254), 1)
+                measurement_number += 1
 
-        for j in range(len(x)):
-            if x[j][0] > 0 and x[j][1] > 0:
-                # positions.append((x_est[i][j], y_est[i][j]))
-                cv2.circle(vid_fragment[frame], (int(x[j][0]),
-                                                 int(x[j][1])), 3,
-                                                (0, 255, 0), 1)
-                cv2.putText(vid_fragment[frame], str(j),
-                            (int(x[j][0] + 10), int(x[j][1] + 20)),
-                            font, 0.5, (0, 254, 0), 1)
+            for j in range(len(x)):
+                if x[j][0] > 0 and x[j][1] > 0:
+                    # positions.append((x_est[i][j], y_est[i][j]))
+                    cv2.circle(vid_fragment[frame], (int(x[j][0]),
+                                                     int(x[j][1])), 3,
+                                                    (0, 255, 0), 1)
+                    cv2.putText(vid_fragment[frame], str(j),
+                                (int(x[j][0] + 10), int(x[j][1] + 20)),
+                                font, 0.5, (0, 254, 0), 1)
 
-        cv2.imshow('bin', vid_fragment[frame])
-        cv2.waitKey(10)
+            cv2.imshow('bin', vid_fragment[frame])
+            cv2.waitKey(10)
 
-        print(ff_nr, '--------------------------------------')
-        ff_nr += 1
-        print(removed_states)
-        print(index)
+            print(ff_nr, '--------------------------------------')
+            ff_nr += 1
+            print(removed_states)
+            print(index)
     return x_est, y_est, est_number
 
 
-def plot_points(maxima_points, e_est, y_est, est_number):
+def plot_points(vid_frag, max_points, x_est, y_est, est_number):
+    index_error = 0
     # plot raw measurements
-    for frame_positions in maxima_points:
+    for frame_positions in max_points:
         for pos in frame_positions:
             plt.plot(pos[0], pos[1], 'r.')
-    plt.axis([0, vid_fragment[0].shape[1], vid_fragment[0].shape[0], 0])
+    try:
+        plt.axis([0, vid_frag[0].shape[1], vid_frag[0].shape[0], 0])
+    except IndexError:
+        index_error = 1
     plt.xlabel('width [px]')
     plt.ylabel('height [px]')
     plt.title('Objects raw measurements')
@@ -609,25 +637,28 @@ def plot_points(maxima_points, e_est, y_est, est_number):
             plt.plot(x_est[ind][::], y_est[ind][::], 'g-')
     # print(frame)
     #  [xmin xmax ymin ymax]
-    plt.axis([0, vid_fragment[0].shape[1], vid_fragment[0].shape[0], 0])
+    try:
+        plt.axis([0, vid_frag[0].shape[1], vid_frag[0].shape[0], 0])
+    except IndexError:
+        index_error = 1
     plt.xlabel('width [px]')
     plt.ylabel('height [px]')
     plt.title('Objects estimated trajectories')
     plt.grid()
     plt.show()
 
-##########################################################################
-start_frame = 0
-stop_frame = 200
-my_video = 'static/files/CIMG4027.MOV'
-font = cv2.FONT_HERSHEY_SIMPLEX
-##########################################################################
-maxima_points, vid_fragment = video_analise(my_video, start_frame, stop_frame)
-x_est, y_est, est_number = kalman(maxima_points)
-plot_points(maxima_points, x_est, y_est, est_number)
-print('\nFinal estimates number:', est_number)
-print('\nTrajectories drawing...')
-print('EOF - DONE')
+# ##########################################################################
+# start_frame = 0
+# stop_frame = 200
+# my_video = 'static/files/CIMG4027.MOV'
+# font = cv2.FONT_HERSHEY_SIMPLEX
+# ##########################################################################
+# maxima_points, vid_fragment = video_analise(my_video, start_frame, stop_frame)
+# x_est, y_est, est_number = kalman(maxima_points)
+# plot_points(vid_fragment, maxima_points, x_est, y_est, est_number)
+# print('\nFinal estimates number:', est_number)
+# print('\nTrajectories drawing...')
+# print('EOF - DONE')
 
 
 class MainPage(View):
