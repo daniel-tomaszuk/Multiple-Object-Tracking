@@ -20,4 +20,14 @@ from Web_App.views import *
 urlpatterns = [
     url(r'^admin/', admin.site.urls),
     url(r'^$', MainPage.as_view(), name='main-page'),
+    url(r'^add_movie', AddMovie.as_view(), name='add-movie'),
+    url(r'^info_movie/(?P<movie_id>(\d)+)', InfoMovie.as_view(),
+        name='info-movie'),
+
+
+
+
+
+
+
 ]

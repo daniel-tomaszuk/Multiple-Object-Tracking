@@ -3,13 +3,10 @@
 """
 Created on Sun Aug 27 10:26:59 2017
 
-@author: dghy
+@author: Daniel 'dghy' Tomaszuk
 """
-from django.core.exceptions import *
-from django.http import HttpResponse
-from django.shortcuts import render
-from django.views import *
-from django.views.generic.edit import *
+
+# non django imports
 import numpy as np
 import cv2
 import sys
@@ -24,6 +21,16 @@ from filterpy.kalman import KalmanFilter
 from filterpy.common import Q_discrete_white_noise
 from munkres import Munkres, DISALLOWED
 from scipy.optimize import linear_sum_assignment
+
+
+# django imports
+from .models import *
+from django.core.urlresolvers import reverse_lazy
+from django.core.exceptions import *
+from django.http import HttpResponse
+from django.shortcuts import render
+from django.views import *
+from django.views.generic.edit import *
 
 
 def otsu_binary(img):
@@ -663,8 +670,33 @@ def plot_points(vid_frag, max_points, x_est, y_est, est_number):
 
 class MainPage(View):
     def get(self, request):
+        movie_list = Movie.objects.all().order_by('id')
         context = {
-            "text": 'test_text12345'
+            "movie_list": movie_list
         }
         return render(request, 'main_page.html', context)
+
+
+class AddMovie(CreateView):
+    model = Movie
+    template_name = "movie_form.html"
+    fields = ['name', 'file']
+    success_url = reverse_lazy('main-page')
+
+
+class InfoMovie(View):
+    def get(self, request, movie_id):
+        movie_info = Movie.objects.get(pk=movie_id)
+        context = {
+            "movie_info": movie_info
+        }
+        return render(request, 'movie_info.html', context)
+
+
+
+
+
+
+
+
 
