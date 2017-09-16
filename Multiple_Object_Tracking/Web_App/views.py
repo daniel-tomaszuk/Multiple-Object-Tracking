@@ -590,6 +590,32 @@ def kalman(maxima_points):
     return x_est, y_est, est_number
 
 
+def plot_points(maxima_points, e_est, y_est, est_number):
+    # plot raw measurements
+    for frame_positions in maxima_points:
+        for pos in frame_positions:
+            plt.plot(pos[0], pos[1], 'r.')
+    plt.axis([0, vid_fragment[0].shape[1], vid_fragment[0].shape[0], 0])
+    plt.xlabel('width [px]')
+    plt.ylabel('height [px]')
+    plt.title('Objects raw measurements')
+    ##########################################################################
+    # plot estimated trajectories
+    for ind in range(est_number):
+        if len(x_est[ind]):
+            #        for pos in range(len(x_est[ind])):
+            #            if not np.isnan(x_est[ind][pos]):
+            #                plt.plot(x_est[ind][pos], y_est[ind][pos], 'g.')
+            plt.plot(x_est[ind][::], y_est[ind][::], 'g-')
+    # print(frame)
+    #  [xmin xmax ymin ymax]
+    plt.axis([0, vid_fragment[0].shape[1], vid_fragment[0].shape[0], 0])
+    plt.xlabel('width [px]')
+    plt.ylabel('height [px]')
+    plt.title('Objects estimated trajectories')
+    plt.grid()
+    plt.show()
+
 ##########################################################################
 start_frame = 0
 stop_frame = 200
@@ -598,41 +624,10 @@ font = cv2.FONT_HERSHEY_SIMPLEX
 ##########################################################################
 maxima_points, vid_fragment = video_analise(my_video, start_frame, stop_frame)
 x_est, y_est, est_number = kalman(maxima_points)
-
+plot_points(maxima_points, x_est, y_est, est_number)
 print('\nFinal estimates number:', est_number)
 print('\nTrajectories drawing...')
-##############################################################################
-# plot raw measurements
-for frame_positions in maxima_points:
-    for pos in frame_positions:
-        plt.plot(pos[0], pos[1], 'r.')
-plt.axis([0, vid_fragment[0].shape[1], vid_fragment[0].shape[0], 0])
-plt.xlabel('width [px]')
-plt.ylabel('height [px]')
-plt.title('Objects raw measurements')
-plt.grid()
-plt.show()
-
-##############################################################################
-# plot estimated trajectories
-for ind in range(est_number):
-    if len(x_est[ind]):
-        #        for pos in range(len(x_est[ind])):
-        #            if not np.isnan(x_est[ind][pos]):
-        #                plt.plot(x_est[ind][pos], y_est[ind][pos], 'g.')
-        plt.plot(x_est[ind][::], y_est[ind][::], 'g-')
-# print(frame)
-#  [xmin xmax ymin ymax]
-plt.axis([0, vid_fragment[0].shape[1], vid_fragment[0].shape[0], 0])
-plt.xlabel('width [px]')
-plt.ylabel('height [px]')
-plt.title('Objects estimated trajectories')
-plt.grid()
-plt.show()
-
 print('EOF - DONE')
-
-#############################################################################
 
 
 class MainPage(View):
