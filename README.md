@@ -8,3 +8,5 @@ Plan:
 - use Monte Carlo method for indexing detected objects,
 - return indexed trajectories. [DONE]
 
+# Check my other repo for more information: https://github.com/dghy/GUI_Blob_Tracker
+Both these projects require OpenCV as well as modules from requirements.txt
